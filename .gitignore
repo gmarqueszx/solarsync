@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Segredos ###
+# Checklist item 6 do CLAUDE.md: nenhuma credencial no Git. Use .env.example como referência.
+.env
+.env.*
+!.env.example
+*.pem

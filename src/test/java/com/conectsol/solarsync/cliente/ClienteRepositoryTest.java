@@ -5,17 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.LocalDate;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+
+import com.conectsol.solarsync.common.RepositoryTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 
-import com.conectsol.solarsync.TestcontainersConfiguration;
 
-@DataJpaTest
-@Import(TestcontainersConfiguration.class)
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@RepositoryTest
 class ClienteRepositoryTest {
 
     @Autowired

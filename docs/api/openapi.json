@@ -1,0 +1,2045 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "description" : "API do controle de homologação de projetos solares da ConectSol.\n\nAutenticação: POST /api/auth/login (e-mail e senha) ou POST /api/auth/login/google (ID token do Google). Use o accessToken como Bearer. Não há logout no servidor — a API é stateless e o cliente descarta os tokens.\n\nMudanças de status são feitas por endpoints de ação (ex.: POST /api/pendencias/{id}/resolver), nunca por PUT: é o que garante a automação entre etapas e a auditoria.",
+    "title" : "SolarSync API",
+    "version" : "v1"
+  },
+  "servers" : [ {
+    "url" : "http://localhost:8080",
+    "description" : "Generated server url"
+  } ],
+  "security" : [ {
+    "bearerAuth" : [ ]
+  } ],
+  "tags" : [ {
+    "description" : "Cadastro base do fluxo de homologação",
+    "name" : "Clientes"
+  }, {
+    "description" : "Etapa 1: pendências do cliente na Coelba",
+    "name" : "Pendências"
+  }, {
+    "description" : "Login por senha ou Google, e renovação de token",
+    "name" : "Autenticação"
+  }, {
+    "description" : "Gestão de acesso — restrita a ADMINISTRADOR",
+    "name" : "Usuários"
+  }, {
+    "description" : "Etapas 2 e 3: homologação e acompanhamento na Coelba",
+    "name" : "Projetos"
+  } ],
+  "paths" : {
+    "/api/auth/eu" : {
+      "get" : {
+        "operationId" : "eu",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsuarioLogadoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Dados e papéis do usuário autenticado",
+        "tags" : [ "Autenticação" ]
+      }
+    },
+    "/api/auth/login" : {
+      "post" : {
+        "operationId" : "login",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoginSenhaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description" : "Tokens emitidos"
+          },
+          "401" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description" : "Credenciais inválidas"
+          }
+        },
+        "summary" : "Login com e-mail e senha",
+        "tags" : [ "Autenticação" ]
+      }
+    },
+    "/api/auth/login/google" : {
+      "post" : {
+        "description" : "Não cria usuário: o e-mail precisa já estar cadastrado e ativo, e pertencer a um domínio permitido.",
+        "operationId" : "loginGoogle",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LoginGoogleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "401" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description" : "Token inválido, domínio não permitido ou usuário não cadastrado/inativo"
+          }
+        },
+        "summary" : "Login com ID token do Google",
+        "tags" : [ "Autenticação" ]
+      }
+    },
+    "/api/auth/refresh" : {
+      "post" : {
+        "description" : "O usuário é relido no banco: quem foi desativado não renova. Não há logout no servidor — a API é stateless, o cliente descarta os tokens.",
+        "operationId" : "renovar",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "401" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description" : "Refresh token inválido, expirado ou de usuário inativo"
+          }
+        },
+        "summary" : "Troca o refresh token por um novo par de tokens",
+        "tags" : [ "Autenticação" ]
+      }
+    },
+    "/api/clientes" : {
+      "get" : {
+        "operationId" : "listar_3",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "nome",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "paginacao",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/Pageable"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaginaResponseClienteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lista clientes paginados, com busca por nome",
+        "tags" : [ "Clientes" ]
+      },
+      "post" : {
+        "operationId" : "criar_3",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ClienteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ClienteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cadastra um cliente",
+        "tags" : [ "Clientes" ]
+      }
+    },
+    "/api/clientes/{id}" : {
+      "delete" : {
+        "operationId" : "excluir_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Clientes" ]
+      },
+      "get" : {
+        "operationId" : "buscar_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ClienteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Clientes" ]
+      },
+      "put" : {
+        "operationId" : "atualizar_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ClienteRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ClienteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Clientes" ]
+      }
+    },
+    "/api/pendencias" : {
+      "get" : {
+        "operationId" : "listar_2",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "filtro",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/PendenciaFiltro"
+          }
+        }, {
+          "in" : "query",
+          "name" : "paginacao",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/Pageable"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaginaResponsePendenciaResumoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lista pendências paginadas, com filtros combináveis",
+        "tags" : [ "Pendências" ]
+      },
+      "post" : {
+        "operationId" : "criar_2",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PendenciaCriarRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PendenciaResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cria uma pendência com status ABERTA",
+        "tags" : [ "Pendências" ]
+      }
+    },
+    "/api/pendencias/{id}" : {
+      "delete" : {
+        "description" : "Restrito a ADMINISTRADOR. O caminho normal para registro errado é cancelar por status, que preserva o histórico.",
+        "operationId" : "excluir_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Exclui a pendência",
+        "tags" : [ "Pendências" ]
+      },
+      "get" : {
+        "operationId" : "buscar_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PendenciaResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Pendências" ]
+      },
+      "put" : {
+        "description" : "Não altera status: use os endpoints de ação.",
+        "operationId" : "atualizar_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PendenciaAtualizarRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PendenciaResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edita os dados da pendência",
+        "tags" : [ "Pendências" ]
+      }
+    },
+    "/api/pendencias/{id}/cancelar" : {
+      "post" : {
+        "operationId" : "cancelar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MotivoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PendenciaResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Cancela a pendência; o motivo fica no histórico",
+        "tags" : [ "Pendências" ]
+      }
+    },
+    "/api/pendencias/{id}/historico" : {
+      "get" : {
+        "operationId" : "historico_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/HistoricoStatusResponse"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Linha do tempo das mudanças de status da pendência",
+        "tags" : [ "Pendências" ]
+      }
+    },
+    "/api/pendencias/{id}/iniciar" : {
+      "post" : {
+        "operationId" : "iniciar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ObservacaoRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PendenciaResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Marca a pendência como EM_ANDAMENTO",
+        "tags" : [ "Pendências" ]
+      }
+    },
+    "/api/pendencias/{id}/reabrir" : {
+      "post" : {
+        "operationId" : "reabrir",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ObservacaoRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PendenciaResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Volta a pendência para ABERTA",
+        "tags" : [ "Pendências" ]
+      }
+    },
+    "/api/pendencias/{id}/resolver" : {
+      "post" : {
+        "description" : "Dispara a criação automática do Projeto do cliente (CLAUDE.md seção 3). Se já houver projeto em andamento, nenhum novo é criado — então esta resposta não garante projeto novo; recarregue a lista de projetos.",
+        "operationId" : "resolver",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ObservacaoRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PendenciaResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Marca a pendência como RESOLVIDA",
+        "tags" : [ "Pendências" ]
+      }
+    },
+    "/api/projetos" : {
+      "get" : {
+        "operationId" : "listar_1",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "filtro",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/ProjetoFiltro"
+          }
+        }, {
+          "in" : "query",
+          "name" : "paginacao",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/Pageable"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaginaResponseProjetoResumoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lista projetos paginados, com filtros combináveis",
+        "tags" : [ "Projetos" ]
+      },
+      "post" : {
+        "description" : "Para o caso em que o projeto não veio da resolução de uma pendência.",
+        "operationId" : "criar_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProjetoCriarRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Cria um projeto em RECEBIDO",
+        "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/projetos/{id}" : {
+      "delete" : {
+        "description" : "Restrito a ADMINISTRADOR.",
+        "operationId" : "excluir_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Exclui o projeto",
+        "tags" : [ "Projetos" ]
+      },
+      "get" : {
+        "operationId" : "buscar_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Projetos" ]
+      },
+      "put" : {
+        "description" : "Não altera status: use os endpoints de ação.",
+        "operationId" : "atualizar_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProjetoAtualizarRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edita os dados do projeto",
+        "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/projetos/{id}/aguardar-envio" : {
+      "post" : {
+        "description" : "Projeto pronto mas com o envio bloqueado, tipicamente por débito do cliente.",
+        "operationId" : "aguardarEnvio",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Marca o projeto como AGUARDANDO_ENVIO",
+        "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/projetos/{id}/aprovar" : {
+      "post" : {
+        "operationId" : "aprovar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProjetoAprovarRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida — por exemplo aprovar projeto que não foi enviado"
+          }
+        },
+        "summary" : "Registra a aprovação pela Coelba",
+        "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/projetos/{id}/corrigir-status" : {
+      "post" : {
+        "description" : "Restrito a ADMINISTRADOR e com justificativa obrigatória. A auditoria é mantida. Existe para a importação da planilha, em que os dados chegam em qualquer ordem, e para destravar erro operacional.",
+        "operationId" : "corrigirStatus",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CorrigirStatusRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Corrige o status pulando a máquina de estados",
+        "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/projetos/{id}/encaminhar" : {
+      "post" : {
+        "description" : "Sem dataEncaminhado no corpo, assume hoje. Essa data alimenta a métrica de tempo entre recebimento e envio.",
+        "operationId" : "encaminhar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProjetoEncaminharRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Encaminha o projeto à Coelba",
+        "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/projetos/{id}/historico" : {
+      "get" : {
+        "operationId" : "historico",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/HistoricoStatusResponse"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Linha do tempo das mudanças de status do projeto",
+        "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/projetos/{id}/reencaminhar" : {
+      "post" : {
+        "operationId" : "reencaminhar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ProjetoEncaminharRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Reenvia o projeto após correção de uma reprova",
+        "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/projetos/{id}/reprovar" : {
+      "post" : {
+        "operationId" : "reprovar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/MotivoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Registra a reprova; o motivo é obrigatório",
+        "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/usuarios" : {
+      "get" : {
+        "operationId" : "listar",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/UsuarioResponse"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lista os usuários com papéis e situação",
+        "tags" : [ "Usuários" ]
+      },
+      "post" : {
+        "description" : "Sem senha, o usuário entra apenas pelo Google. Cadastro prévio é obrigatório: o login Google não cria conta.",
+        "operationId" : "criar",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UsuarioRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsuarioResponse"
+                }
+              }
+            },
+            "description" : "E-mail já cadastrado"
+          }
+        },
+        "summary" : "Cadastra um usuário",
+        "tags" : [ "Usuários" ]
+      }
+    },
+    "/api/usuarios/lookup" : {
+      "get" : {
+        "operationId" : "lookup",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "ativo",
+          "required" : false,
+          "schema" : {
+            "type" : "boolean",
+            "default" : true
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/UsuarioResumoResponse"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lista id e nome dos usuários, para seletores",
+        "tags" : [ "Usuários" ]
+      }
+    },
+    "/api/usuarios/{id}" : {
+      "delete" : {
+        "operationId" : "excluir",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "409" : {
+            "description" : "Usuário já referenciado no histórico; desative em vez de excluir"
+          }
+        },
+        "tags" : [ "Usuários" ]
+      },
+      "get" : {
+        "operationId" : "buscar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsuarioResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Usuários" ]
+      },
+      "put" : {
+        "operationId" : "atualizar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UsuarioRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsuarioResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Usuários" ]
+      }
+    },
+    "/api/usuarios/{id}/ativar" : {
+      "post" : {
+        "operationId" : "ativar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsuarioResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Usuários" ]
+      }
+    },
+    "/api/usuarios/{id}/desativar" : {
+      "post" : {
+        "description" : "É a forma correta de cortar acesso de quem saiu: o access token expira em minutos e a renovação passa a ser negada, preservando a auditoria que a exclusão destruiria.",
+        "operationId" : "desativar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsuarioResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Desativa o usuário",
+        "tags" : [ "Usuários" ]
+      }
+    },
+    "/api/usuarios/{id}/senha" : {
+      "post" : {
+        "operationId" : "definirSenha",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DefinirSenhaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsuarioResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Define ou redefine a senha do usuário",
+        "tags" : [ "Usuários" ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "ClienteRequest" : {
+        "type" : "object",
+        "properties" : {
+          "cidade" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 0
+          },
+          "dataPagamento" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "nome" : {
+            "type" : "string",
+            "maxLength" : 150,
+            "minLength" : 0
+          },
+          "vendedor" : {
+            "type" : "string",
+            "maxLength" : 150,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "nome" ]
+      },
+      "ClienteResponse" : {
+        "type" : "object",
+        "properties" : {
+          "cidade" : {
+            "type" : "string"
+          },
+          "dataPagamento" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nome" : {
+            "type" : "string"
+          },
+          "vendedor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ClienteResumoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "cidade" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nome" : {
+            "type" : "string"
+          }
+        }
+      },
+      "CorrigirStatusRequest" : {
+        "type" : "object",
+        "properties" : {
+          "justificativa" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
+          },
+          "novoStatus" : {
+            "type" : "string",
+            "enum" : [ "RECEBIDO", "AGUARDANDO_ENVIO", "ENCAMINHADO", "APROVADO", "REPROVADO", "REENCAMINHADO" ]
+          }
+        },
+        "required" : [ "justificativa", "novoStatus" ]
+      },
+      "DefinirSenhaRequest" : {
+        "type" : "object",
+        "properties" : {
+          "senha" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 8
+          }
+        },
+        "required" : [ "senha" ]
+      },
+      "HistoricoStatusResponse" : {
+        "type" : "object",
+        "properties" : {
+          "entidadeId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "entidadeTipo" : {
+            "type" : "string",
+            "enum" : [ "CLIENTE", "PENDENCIA", "DEBITO", "PROJETO", "VISTORIA", "UNIFICACAO" ]
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "ocorridoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "statusAnterior" : {
+            "type" : "string"
+          },
+          "statusNovo" : {
+            "type" : "string"
+          },
+          "usuarioId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "LoginGoogleRequest" : {
+        "type" : "object",
+        "properties" : {
+          "idToken" : {
+            "type" : "string",
+            "minLength" : 1
+          }
+        },
+        "required" : [ "idToken" ]
+      },
+      "LoginSenhaRequest" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "format" : "email",
+            "minLength" : 1
+          },
+          "senha" : {
+            "type" : "string",
+            "minLength" : 1
+          }
+        },
+        "required" : [ "email", "senha" ]
+      },
+      "MotivoRequest" : {
+        "type" : "object",
+        "properties" : {
+          "motivo" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "motivo" ]
+      },
+      "ObservacaoRequest" : {
+        "type" : "object",
+        "properties" : {
+          "observacao" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
+          }
+        }
+      },
+      "Pageable" : {
+        "type" : "object",
+        "properties" : {
+          "page" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          },
+          "size" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 1
+          },
+          "sort" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "PaginaResponseClienteResponse" : {
+        "type" : "object",
+        "properties" : {
+          "conteudo" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ClienteResponse"
+            }
+          },
+          "pagina" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "tamanho" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalElementos" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPaginas" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "ultima" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "PaginaResponsePendenciaResumoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "conteudo" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PendenciaResumoResponse"
+            }
+          },
+          "pagina" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "tamanho" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalElementos" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPaginas" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "ultima" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "PaginaResponseProjetoResumoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "conteudo" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ProjetoResumoResponse"
+            }
+          },
+          "pagina" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "tamanho" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalElementos" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPaginas" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "ultima" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "PendenciaAtualizarRequest" : {
+        "type" : "object",
+        "properties" : {
+          "observacao" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
+          },
+          "responsavelId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "tipo" : {
+            "type" : "string",
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+          }
+        },
+        "required" : [ "tipo" ]
+      },
+      "PendenciaCriarRequest" : {
+        "type" : "object",
+        "properties" : {
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "observacao" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
+          },
+          "responsavelId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "solicitadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "tipo" : {
+            "type" : "string",
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+          }
+        },
+        "required" : [ "clienteId", "tipo" ]
+      },
+      "PendenciaFiltro" : {
+        "type" : "object",
+        "properties" : {
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "q" : {
+            "type" : "string",
+            "maxLength" : 150,
+            "minLength" : 0
+          },
+          "responsavelId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "solicitadoAte" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "solicitadoDe" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "ABERTA", "EM_ANDAMENTO", "RESOLVIDA", "CANCELADA" ]
+            },
+            "uniqueItems" : true
+          },
+          "tipo" : {
+            "type" : "string",
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+          }
+        }
+      },
+      "PendenciaResponse" : {
+        "type" : "object",
+        "properties" : {
+          "atualizadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "cliente" : {
+            "$ref" : "#/components/schemas/ClienteResumoResponse"
+          },
+          "criadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "observacao" : {
+            "type" : "string"
+          },
+          "resolvidoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "responsavel" : {
+            "$ref" : "#/components/schemas/UsuarioResumoResponse"
+          },
+          "solicitadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "ABERTA", "EM_ANDAMENTO", "RESOLVIDA", "CANCELADA" ]
+          },
+          "tipo" : {
+            "type" : "string",
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+          }
+        }
+      },
+      "PendenciaResumoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "clienteNome" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "resolvidoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "responsavelId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "responsavelNome" : {
+            "type" : "string"
+          },
+          "solicitadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "ABERTA", "EM_ANDAMENTO", "RESOLVIDA", "CANCELADA" ]
+          },
+          "tipo" : {
+            "type" : "string",
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+          }
+        }
+      },
+      "ProjetoAprovarRequest" : {
+        "type" : "object",
+        "properties" : {
+          "dataAprovacao" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }
+      },
+      "ProjetoAtualizarRequest" : {
+        "type" : "object",
+        "properties" : {
+          "analistaResponsavelId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "dataArt" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataRecebimento" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "tipoProjeto" : {
+            "type" : "string",
+            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+          }
+        },
+        "required" : [ "tipoProjeto" ]
+      },
+      "ProjetoCriarRequest" : {
+        "type" : "object",
+        "properties" : {
+          "analistaResponsavelId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "dataArt" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataRecebimento" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "tipoProjeto" : {
+            "type" : "string",
+            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+          }
+        },
+        "required" : [ "clienteId", "tipoProjeto" ]
+      },
+      "ProjetoEncaminharRequest" : {
+        "type" : "object",
+        "properties" : {
+          "dataArt" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataEncaminhado" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }
+      },
+      "ProjetoFiltro" : {
+        "type" : "object",
+        "properties" : {
+          "analistaResponsavelId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "q" : {
+            "type" : "string",
+            "maxLength" : 150,
+            "minLength" : 0
+          },
+          "recebidoAte" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "recebidoDe" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "status" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "RECEBIDO", "AGUARDANDO_ENVIO", "ENCAMINHADO", "APROVADO", "REPROVADO", "REENCAMINHADO" ]
+            },
+            "uniqueItems" : true
+          },
+          "tipoProjeto" : {
+            "type" : "string",
+            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+          }
+        }
+      },
+      "ProjetoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "analistaResponsavel" : {
+            "$ref" : "#/components/schemas/UsuarioResumoResponse"
+          },
+          "atualizadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "cliente" : {
+            "$ref" : "#/components/schemas/ClienteResumoResponse"
+          },
+          "criadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "dataAprovacao" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataArt" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataEncaminhado" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataRecebimento" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "motivoReprova" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "RECEBIDO", "AGUARDANDO_ENVIO", "ENCAMINHADO", "APROVADO", "REPROVADO", "REENCAMINHADO" ]
+          },
+          "tipoProjeto" : {
+            "type" : "string",
+            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+          }
+        }
+      },
+      "ProjetoResumoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "analistaResponsavelId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "analistaResponsavelNome" : {
+            "type" : "string"
+          },
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "clienteNome" : {
+            "type" : "string"
+          },
+          "dataAprovacao" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataEncaminhado" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataRecebimento" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "RECEBIDO", "AGUARDANDO_ENVIO", "ENCAMINHADO", "APROVADO", "REPROVADO", "REENCAMINHADO" ]
+          },
+          "tipoProjeto" : {
+            "type" : "string",
+            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+          }
+        }
+      },
+      "RefreshRequest" : {
+        "type" : "object",
+        "properties" : {
+          "refreshToken" : {
+            "type" : "string",
+            "minLength" : 1
+          }
+        },
+        "required" : [ "refreshToken" ]
+      },
+      "TokenResponse" : {
+        "type" : "object",
+        "properties" : {
+          "accessToken" : {
+            "type" : "string"
+          },
+          "expiraEmSegundos" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "refreshToken" : {
+            "type" : "string"
+          },
+          "tipo" : {
+            "type" : "string"
+          },
+          "usuario" : {
+            "$ref" : "#/components/schemas/UsuarioLogadoResponse"
+          }
+        }
+      },
+      "UsuarioLogadoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nome" : {
+            "type" : "string"
+          },
+          "papeis" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "ADMINISTRADOR", "GESTOR", "ANALISTA" ]
+            }
+          }
+        }
+      },
+      "UsuarioRequest" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string",
+            "format" : "email",
+            "maxLength" : 150,
+            "minLength" : 0
+          },
+          "nome" : {
+            "type" : "string",
+            "maxLength" : 150,
+            "minLength" : 0
+          },
+          "papeis" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "ADMINISTRADOR", "GESTOR", "ANALISTA" ]
+            },
+            "minItems" : 1,
+            "uniqueItems" : true
+          },
+          "senha" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 8
+          }
+        },
+        "required" : [ "email", "nome", "papeis" ]
+      },
+      "UsuarioResponse" : {
+        "type" : "object",
+        "properties" : {
+          "ativo" : {
+            "type" : "boolean"
+          },
+          "email" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nome" : {
+            "type" : "string"
+          },
+          "papeis" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "ADMINISTRADOR", "GESTOR", "ANALISTA" ]
+            }
+          },
+          "temSenha" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "UsuarioResumoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nome" : {
+            "type" : "string"
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "bearerFormat" : "JWT",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
+    }
+  }
+}

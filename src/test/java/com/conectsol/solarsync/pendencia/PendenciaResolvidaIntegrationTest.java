@@ -46,12 +46,22 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private HistoricoStatusRepository historicoStatusRepository;
 
+    /** Só o usuário criado por este teste — nunca os semeados pelas migrations. */
+    private Usuario analistaCriado;
+
+    /**
+     * Apaga apenas o que o teste criou. Um {@code usuarioRepository.deleteAll()} aqui apagaria
+     * o admin semeado pela V3 e contaminaria os outros testes que compartilham o contêiner.
+     */
     @AfterEach
     void limpar() {
         historicoStatusRepository.deleteAll();
         projetoRepository.deleteAll();
         pendenciaRepository.deleteAll();
-        usuarioRepository.deleteAll();
+        if (analistaCriado != null) {
+            usuarioRepository.deleteById(analistaCriado.getId());
+            analistaCriado = null;
+        }
         clienteRepository.deleteAll();
     }
 
@@ -62,6 +72,7 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
                 .nome("Analista Teste")
                 .email("analista.teste@conectsol.com")
                 .build());
+        analistaCriado = analista;
         Pendencia pendencia = pendenciaRepository.save(Pendencia.builder()
                 .cliente(cliente)
                 .tipo(TipoPendencia.LIGACAO_NOVA)

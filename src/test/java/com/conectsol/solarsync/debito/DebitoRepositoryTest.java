@@ -6,19 +6,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
+
+import com.conectsol.solarsync.common.RepositoryTest;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
-import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
-import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataAccessException;
 
-import com.conectsol.solarsync.TestcontainersConfiguration;
 import com.conectsol.solarsync.cliente.Cliente;
 
-@DataJpaTest
-@Import(TestcontainersConfiguration.class)
-@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@RepositoryTest
 class DebitoRepositoryTest {
 
     @Autowired
