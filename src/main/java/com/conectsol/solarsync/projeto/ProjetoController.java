@@ -34,6 +34,7 @@ import com.conectsol.solarsync.projeto.dto.ProjetoEncaminharRequest;
 import com.conectsol.solarsync.projeto.dto.ProjetoFiltro;
 import com.conectsol.solarsync.projeto.dto.ProjetoResponse;
 import com.conectsol.solarsync.projeto.dto.ProjetoResumoResponse;
+import com.conectsol.solarsync.projeto.dto.RegistrarInstalacaoRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -175,6 +176,21 @@ public class ProjetoController {
 
         return ProjetoResponse.de(
                 projetoService.reprovar(id, requisicao.motivo(), usuario.id()));
+    }
+
+    @PostMapping("/{id}/registrar-instalacao")
+    @PodeEscrever
+    @Operation(
+            summary = "Registra a data em que a usina foi instalada",
+            description = "Entrada manual, a partir da informação que chega do campo. Não altera "
+                    + "o status (que acompanha a homologação na Coelba) e não exige que o "
+                    + "projeto esteja aprovado. É o marco de partida da vistoria: sem esta "
+                    + "data, solicitar vistoria é bloqueado. Para achar a fila de trabalho, use "
+                    + "GET /api/projetos?instalado=true&semVistoria=true.")
+    public ProjetoResponse registrarInstalacao(@PathVariable Long id,
+            @RequestBody @Valid RegistrarInstalacaoRequest requisicao) {
+        return ProjetoResponse.de(
+                projetoService.registrarInstalacao(id, requisicao.dataInstalacao()));
     }
 
     @PostMapping("/{id}/corrigir-status")

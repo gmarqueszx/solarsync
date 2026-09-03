@@ -66,8 +66,22 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
   - `AGUARDANDO_ENVIO`: projeto já preenchido, mas ainda não enviado à Coelba por algum motivo
     operacional. **Não é o estado do cliente com débito**: débito não pausa o projeto, ele
     bloqueia o envio (ver "Débito" abaixo)
-- **Vistoria** — projeto_id, data_solicitacao, status (aprovada/reprovada), data_resultado
-- **Unificacao** — cliente_id, cidade, projetista_id, informações, feita (bool), desligamento (bool)
+- **Projeto.data_instalacao** — quando a usina foi instalada. **Entrada manual**: a Nycole
+  recolhe a informação no grupo "projetos instalados" e registra em
+  `POST /api/projetos/{id}/registrar-instalacao`. É campo do Projeto, e não um status, porque o
+  status acompanha a homologação na Coelba (decisão deles) enquanto a instalação é evento de
+  campo — misturar os dois na mesma máquina de estados confundiria coisas diferentes. Sem essa
+  data, solicitar vistoria é bloqueado (409 `PROJETO_SEM_INSTALACAO`)
+- **Vistoria** — projeto_id, data_solicitacao, status (`SOLICITADA` → `APROVADA` | `REPROVADA`,
+  e `REPROVADA` → `SOLICITADA` para o reenvio após correção), data_resultado. Reprova e nova
+  solicitação ficam no **mesmo registro**, para o histórico mostrar quantas idas e vindas o
+  cliente teve em vez de espalhar em vistorias soltas
+- **Unificacao** — cliente_id, cidade, projetista_id, informações, feita (bool), desligamento
+  (bool). Os dois marcos são **independentes e em qualquer ordem**, e a entidade não tem campo
+  de status: por isso este é o único módulo sem máquina de estados nem evento de domínio —
+  inventar um status só para uniformizar criaria modelagem que o processo real não tem, e o
+  dashboard não pede métrica de tempo de unificação. As filas de trabalho saem de filtro:
+  `feita=false`, e `feita=true&desligamento=false` para quem ainda tem medidor a desligar
 - **Usuario** / **Papel** / **Permissao** — RBAC (ver seção 4)
 - **HistoricoStatus** — tabela de auditoria (entidade_tipo, entidade_id, status_anterior,
   status_novo, timestamp, usuario_id) — **necessária para calcular todas as métricas do
@@ -409,11 +423,12 @@ existe o `AdminBootstrap`, que aplica `SOLARSYNC_ADMIN_SENHA_INICIAL` ao admin u
    **feito** (fase 2): mais Clientes e Usuários, contrato em `docs/api/openapi.json`
 3. ~~Débito (etapa 2)~~ — **feito**: `PUT /api/debitos/cliente/{clienteId}` registra a consulta,
    e débito ativo bloqueia o envio à Coelba com 409
-4. **Próximo**: **Vistoria e Unificação** (etapa 4 do fluxo). A regra de negócio a definir com o
-   usuário é o gatilho da vistoria: projeto aprovado + instalação feita → solicitar vistoria.
-   Falta saber onde a data de instalação entra, já que ela não existe no modelo e a métrica
-   "tempo médio para solicitar vistoria pós-instalação" depende dela
-5. **Dashboard** (seção 5) — só depois que houver `historico_status` com volume real
+4. ~~Vistoria e Unificação (etapa 4)~~ — **feito**: `data_instalacao` no Projeto (entrada
+   manual), vistoria só depois da instalação, e as duas filas de unificação por filtro
+5. **Próximo**: **Dashboard** (seção 5). Todos os marcos de que as métricas precisam já estão
+   sendo gravados em `historico_status` — falta só agregar. Depende de ter volume de dado real,
+   então a importação da planilha (passo 7) pode vir antes para o gestor ver número que
+   signifique algo
 6. Frontend `solarsync-web` consumindo o contrato de `docs/api/openapi.json`
 7. Script de importação da planilha (usar `POST /api/projetos/{id}/corrigir-status` para os
    registros que chegam fora de ordem)

@@ -62,4 +62,12 @@ public class Projeto extends BaseEntity {
 
     @Column(name = "data_aprovacao")
     private LocalDate dataAprovacao;
+
+    /**
+     * Quando a usina foi instalada. Entrada manual (a informação chega pelo grupo de
+     * instalados), e não um status: o status acompanha a homologação na Coelba, a instalação é
+     * evento de campo. É o marco de partida da vistoria — sem ela, solicitar vistoria é barrado.
+     */
+    @Column(name = "data_instalacao")
+    private LocalDate dataInstalacao;
 }

@@ -47,6 +47,25 @@ final class ProjetoSpecs {
             filtros.add((raiz, consulta, cb) ->
                     cb.lessThanOrEqualTo(raiz.get("dataRecebimento"), filtro.recebidoAte()));
         }
+        if (filtro.instalado() != null) {
+            filtros.add((raiz, consulta, cb) -> filtro.instalado()
+                    ? cb.isNotNull(raiz.get("dataInstalacao"))
+                    : cb.isNull(raiz.get("dataInstalacao")));
+        }
+        if (filtro.semVistoria() != null) {
+            filtros.add((raiz, consulta, cb) -> {
+                // Subconsulta em vez de join: um join deixaria o count da paginação errado
+                // quando o projeto tem mais de uma vistoria.
+                jakarta.persistence.criteria.Subquery<Long> vistorias =
+                        consulta.subquery(Long.class);
+                jakarta.persistence.criteria.Root<com.conectsol.solarsync.vistoria.Vistoria> v =
+                        vistorias.from(com.conectsol.solarsync.vistoria.Vistoria.class);
+                vistorias.select(cb.literal(1L))
+                        .where(cb.equal(v.get("projeto").get("id"), raiz.get("id")));
+
+                return filtro.semVistoria() ? cb.not(cb.exists(vistorias)) : cb.exists(vistorias);
+            });
+        }
 
         return filtros.isEmpty() ? Specification.unrestricted() : Specification.allOf(filtros);
     }

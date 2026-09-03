@@ -17,7 +17,8 @@ public record ProjetoResumoResponse(
         String analistaResponsavelNome,
         LocalDate dataRecebimento,
         LocalDate dataEncaminhado,
-        LocalDate dataAprovacao) {
+        LocalDate dataAprovacao,
+        LocalDate dataInstalacao) {
 
     public static ProjetoResumoResponse de(Projeto projeto) {
         return new ProjetoResumoResponse(
@@ -32,6 +33,7 @@ public record ProjetoResumoResponse(
                         : projeto.getAnalistaResponsavel().getNome(),
                 projeto.getDataRecebimento(),
                 projeto.getDataEncaminhado(),
-                projeto.getDataAprovacao());
+                projeto.getDataAprovacao(),
+                projeto.getDataInstalacao());
     }
 }

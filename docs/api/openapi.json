@@ -28,8 +28,14 @@
     "description" : "Gestão de acesso — restrita a ADMINISTRADOR",
     "name" : "Usuários"
   }, {
+    "description" : "Etapa 4: vistoria da Coelba após a instalação",
+    "name" : "Vistorias"
+  }, {
     "description" : "Etapas 2 e 3: homologação e acompanhamento na Coelba",
     "name" : "Projetos"
+  }, {
+    "description" : "Etapa 4: unificação e desligamento do medidor antigo",
+    "name" : "Unificações"
   } ],
   "paths" : {
     "/api/auth/eu" : {
@@ -152,7 +158,7 @@
     },
     "/api/clientes" : {
       "get" : {
-        "operationId" : "listar_3",
+        "operationId" : "listar_5",
         "parameters" : [ {
           "in" : "query",
           "name" : "nome",
@@ -184,7 +190,7 @@
         "tags" : [ "Clientes" ]
       },
       "post" : {
-        "operationId" : "criar_3",
+        "operationId" : "criar_4",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -213,7 +219,7 @@
     },
     "/api/clientes/{id}" : {
       "delete" : {
-        "operationId" : "excluir_3",
+        "operationId" : "excluir_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -231,7 +237,7 @@
         "tags" : [ "Clientes" ]
       },
       "get" : {
-        "operationId" : "buscar_3",
+        "operationId" : "buscar_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -256,7 +262,7 @@
         "tags" : [ "Clientes" ]
       },
       "put" : {
-        "operationId" : "atualizar_3",
+        "operationId" : "atualizar_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -294,7 +300,7 @@
     "/api/debitos" : {
       "get" : {
         "description" : "Filtre por status=ATIVO para ver quem está travado, ou use consultadoAntesDe para achar consultas velhas que valem refazer.",
-        "operationId" : "listar_4",
+        "operationId" : "listar_6",
         "parameters" : [ {
           "in" : "query",
           "name" : "filtro",
@@ -394,7 +400,7 @@
     "/api/debitos/{id}" : {
       "delete" : {
         "description" : "Restrito a ADMINISTRADOR. O caminho normal é registrar QUITADO, que preserva o histórico.",
-        "operationId" : "excluir_4",
+        "operationId" : "excluir_6",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -416,7 +422,7 @@
     "/api/debitos/{id}/historico" : {
       "get" : {
         "description" : "É desta linha do tempo que sai a métrica de tempo parado por débito.",
-        "operationId" : "historico_2",
+        "operationId" : "historico_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -447,7 +453,7 @@
     },
     "/api/pendencias" : {
       "get" : {
-        "operationId" : "listar_2",
+        "operationId" : "listar_4",
         "parameters" : [ {
           "in" : "query",
           "name" : "filtro",
@@ -479,7 +485,7 @@
         "tags" : [ "Pendências" ]
       },
       "post" : {
-        "operationId" : "criar_2",
+        "operationId" : "criar_3",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -509,7 +515,7 @@
     "/api/pendencias/{id}" : {
       "delete" : {
         "description" : "Restrito a ADMINISTRADOR. O caminho normal para registro errado é cancelar por status, que preserva o histórico.",
-        "operationId" : "excluir_2",
+        "operationId" : "excluir_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -528,7 +534,7 @@
         "tags" : [ "Pendências" ]
       },
       "get" : {
-        "operationId" : "buscar_2",
+        "operationId" : "buscar_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -554,7 +560,7 @@
       },
       "put" : {
         "description" : "Não altera status: use os endpoints de ação.",
-        "operationId" : "atualizar_2",
+        "operationId" : "atualizar_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -630,7 +636,7 @@
     },
     "/api/pendencias/{id}/historico" : {
       "get" : {
-        "operationId" : "historico_1",
+        "operationId" : "historico_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -698,7 +704,7 @@
     },
     "/api/pendencias/{id}/reabrir" : {
       "post" : {
-        "operationId" : "reabrir",
+        "operationId" : "reabrir_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -773,7 +779,7 @@
     },
     "/api/projetos" : {
       "get" : {
-        "operationId" : "listar_1",
+        "operationId" : "listar_3",
         "parameters" : [ {
           "in" : "query",
           "name" : "filtro",
@@ -806,7 +812,7 @@
       },
       "post" : {
         "description" : "Para o caso em que o projeto não veio da resolução de uma pendência.",
-        "operationId" : "criar_1",
+        "operationId" : "criar_2",
         "requestBody" : {
           "content" : {
             "application/json" : {
@@ -836,7 +842,7 @@
     "/api/projetos/{id}" : {
       "delete" : {
         "description" : "Restrito a ADMINISTRADOR.",
-        "operationId" : "excluir_1",
+        "operationId" : "excluir_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -855,7 +861,7 @@
         "tags" : [ "Projetos" ]
       },
       "get" : {
-        "operationId" : "buscar_1",
+        "operationId" : "buscar_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -881,7 +887,7 @@
       },
       "put" : {
         "description" : "Não altera status: use os endpoints de ação.",
-        "operationId" : "atualizar_1",
+        "operationId" : "atualizar_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -948,7 +954,7 @@
     },
     "/api/projetos/{id}/aprovar" : {
       "post" : {
-        "operationId" : "aprovar",
+        "operationId" : "aprovar_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -1062,7 +1068,7 @@
     },
     "/api/projetos/{id}/historico" : {
       "get" : {
-        "operationId" : "historico",
+        "operationId" : "historico_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -1128,9 +1134,48 @@
         "tags" : [ "Projetos" ]
       }
     },
+    "/api/projetos/{id}/registrar-instalacao" : {
+      "post" : {
+        "description" : "Entrada manual, a partir da informação que chega do campo. Não altera o status (que acompanha a homologação na Coelba) e não exige que o projeto esteja aprovado. É o marco de partida da vistoria: sem esta data, solicitar vistoria é bloqueado. Para achar a fila de trabalho, use GET /api/projetos?instalado=true&semVistoria=true.",
+        "operationId" : "registrarInstalacao",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RegistrarInstalacaoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProjetoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Registra a data em que a usina foi instalada",
+        "tags" : [ "Projetos" ]
+      }
+    },
     "/api/projetos/{id}/reprovar" : {
       "post" : {
-        "operationId" : "reprovar",
+        "operationId" : "reprovar_1",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -1166,9 +1211,240 @@
         "tags" : [ "Projetos" ]
       }
     },
+    "/api/unificacoes" : {
+      "get" : {
+        "description" : "feita=false é a fila de trabalho; feita=true&desligamento=false mostra quem já unificou mas ainda tem medidor para desligar.",
+        "operationId" : "listar_2",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "filtro",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/UnificacaoFiltro"
+          }
+        }, {
+          "in" : "query",
+          "name" : "paginacao",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/Pageable"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaginaResponseUnificacaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lista unificações paginadas, com filtros combináveis",
+        "tags" : [ "Unificações" ]
+      },
+      "post" : {
+        "description" : "Sem cidade no corpo, herda a cidade do cliente.",
+        "operationId" : "criar_1",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UnificacaoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnificacaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Registra uma unificação pendente",
+        "tags" : [ "Unificações" ]
+      }
+    },
+    "/api/unificacoes/{id}" : {
+      "delete" : {
+        "description" : "Restrito a ADMINISTRADOR.",
+        "operationId" : "excluir_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Exclui a unificação",
+        "tags" : [ "Unificações" ]
+      },
+      "get" : {
+        "operationId" : "buscar_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnificacaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Unificações" ]
+      },
+      "put" : {
+        "description" : "Não altera os marcos: use as ações de concluir e desligar.",
+        "operationId" : "atualizar_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/UnificacaoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnificacaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Edita os dados da unificação",
+        "tags" : [ "Unificações" ]
+      }
+    },
+    "/api/unificacoes/{id}/concluir" : {
+      "post" : {
+        "operationId" : "concluir",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnificacaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Marca a unificação como feita",
+        "tags" : [ "Unificações" ]
+      }
+    },
+    "/api/unificacoes/{id}/reabrir" : {
+      "post" : {
+        "operationId" : "reabrir",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnificacaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Desfaz a marcação de feita, para corrigir registro errado",
+        "tags" : [ "Unificações" ]
+      }
+    },
+    "/api/unificacoes/{id}/registrar-desligamento" : {
+      "post" : {
+        "operationId" : "registrarDesligamento",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnificacaoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Marca que o medidor antigo foi desligado",
+        "tags" : [ "Unificações" ]
+      }
+    },
     "/api/usuarios" : {
       "get" : {
-        "operationId" : "listar",
+        "operationId" : "listar_1",
         "responses" : {
           "200" : {
             "content" : {
@@ -1419,6 +1695,259 @@
         },
         "summary" : "Define ou redefine a senha do usuário",
         "tags" : [ "Usuários" ]
+      }
+    },
+    "/api/vistorias" : {
+      "get" : {
+        "operationId" : "listar",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "filtro",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/VistoriaFiltro"
+          }
+        }, {
+          "in" : "query",
+          "name" : "paginacao",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/Pageable"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaginaResponseVistoriaResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lista vistorias paginadas, com filtros combináveis",
+        "tags" : [ "Vistorias" ]
+      },
+      "post" : {
+        "description" : "Exige que o projeto tenha data de instalação registrada — vistoria é pós-instalação. Para achar a fila, use GET /api/projetos?instalado=true&semVistoria=true.",
+        "operationId" : "solicitar",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SolicitarVistoriaRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VistoriaResponse"
+                }
+              }
+            },
+            "description" : "Projeto sem data de instalação registrada"
+          }
+        },
+        "summary" : "Solicita a vistoria de um projeto instalado",
+        "tags" : [ "Vistorias" ]
+      }
+    },
+    "/api/vistorias/{id}" : {
+      "delete" : {
+        "description" : "Restrito a ADMINISTRADOR.",
+        "operationId" : "excluir_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Exclui a vistoria",
+        "tags" : [ "Vistorias" ]
+      },
+      "get" : {
+        "operationId" : "buscar_5",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VistoriaResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "Vistorias" ]
+      }
+    },
+    "/api/vistorias/{id}/aprovar" : {
+      "post" : {
+        "description" : "Fecha o ciclo do cliente: daqui o processo segue para o pós-venda.",
+        "operationId" : "aprovar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ResultadoVistoriaRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VistoriaResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Registra vistoria aprovada",
+        "tags" : [ "Vistorias" ]
+      }
+    },
+    "/api/vistorias/{id}/historico" : {
+      "get" : {
+        "operationId" : "historico",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/HistoricoStatusResponse"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Linha do tempo da vistoria, incluindo as idas e vindas de reprova",
+        "tags" : [ "Vistorias" ]
+      }
+    },
+    "/api/vistorias/{id}/reprovar" : {
+      "post" : {
+        "operationId" : "reprovar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ResultadoVistoriaRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VistoriaResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Registra vistoria reprovada",
+        "tags" : [ "Vistorias" ]
+      }
+    },
+    "/api/vistorias/{id}/resolicitar" : {
+      "post" : {
+        "description" : "Reutiliza o mesmo registro, para o histórico mostrar quantas idas e vindas o cliente teve.",
+        "operationId" : "resolicitar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SolicitarVistoriaRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VistoriaResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Pede a vistoria de novo após uma reprova",
+        "tags" : [ "Vistorias" ]
       }
     }
   },
@@ -1798,6 +2327,66 @@
           }
         }
       },
+      "PaginaResponseUnificacaoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "conteudo" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/UnificacaoResponse"
+            }
+          },
+          "pagina" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "tamanho" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalElementos" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPaginas" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "ultima" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "PaginaResponseVistoriaResponse" : {
+        "type" : "object",
+        "properties" : {
+          "conteudo" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/VistoriaResponse"
+            }
+          },
+          "pagina" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "tamanho" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalElementos" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPaginas" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "ultima" : {
+            "type" : "boolean"
+          }
+        }
+      },
       "PendenciaAtualizarRequest" : {
         "type" : "object",
         "properties" : {
@@ -2044,6 +2633,9 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "instalado" : {
+            "type" : "boolean"
+          },
           "q" : {
             "type" : "string",
             "maxLength" : 150,
@@ -2056,6 +2648,9 @@
           "recebidoDe" : {
             "type" : "string",
             "format" : "date"
+          },
+          "semVistoria" : {
+            "type" : "boolean"
           },
           "status" : {
             "type" : "array",
@@ -2097,6 +2692,10 @@
             "format" : "date"
           },
           "dataEncaminhado" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataInstalacao" : {
             "type" : "string",
             "format" : "date"
           },
@@ -2146,6 +2745,10 @@
             "type" : "string",
             "format" : "date"
           },
+          "dataInstalacao" : {
+            "type" : "string",
+            "format" : "date"
+          },
           "dataRecebimento" : {
             "type" : "string",
             "format" : "date"
@@ -2174,6 +2777,39 @@
         },
         "required" : [ "refreshToken" ]
       },
+      "RegistrarInstalacaoRequest" : {
+        "type" : "object",
+        "properties" : {
+          "dataInstalacao" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        },
+        "required" : [ "dataInstalacao" ]
+      },
+      "ResultadoVistoriaRequest" : {
+        "type" : "object",
+        "properties" : {
+          "dataResultado" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }
+      },
+      "SolicitarVistoriaRequest" : {
+        "type" : "object",
+        "properties" : {
+          "dataSolicitacao" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "projetoId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "projetoId" ]
+      },
       "TokenResponse" : {
         "type" : "object",
         "properties" : {
@@ -2192,6 +2828,94 @@
           },
           "usuario" : {
             "$ref" : "#/components/schemas/UsuarioLogadoResponse"
+          }
+        }
+      },
+      "UnificacaoFiltro" : {
+        "type" : "object",
+        "properties" : {
+          "cidade" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 0
+          },
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "desligamento" : {
+            "type" : "boolean"
+          },
+          "feita" : {
+            "type" : "boolean"
+          },
+          "projetistaId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "q" : {
+            "type" : "string",
+            "maxLength" : 150,
+            "minLength" : 0
+          }
+        }
+      },
+      "UnificacaoRequest" : {
+        "type" : "object",
+        "properties" : {
+          "cidade" : {
+            "type" : "string",
+            "maxLength" : 100,
+            "minLength" : 0
+          },
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "informacoes" : {
+            "type" : "string",
+            "maxLength" : 1000,
+            "minLength" : 0
+          },
+          "projetistaId" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "required" : [ "clienteId" ]
+      },
+      "UnificacaoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "atualizadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "cidade" : {
+            "type" : "string"
+          },
+          "cliente" : {
+            "$ref" : "#/components/schemas/ClienteResumoResponse"
+          },
+          "criadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "desligamento" : {
+            "type" : "boolean"
+          },
+          "feita" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "informacoes" : {
+            "type" : "string"
+          },
+          "projetista" : {
+            "$ref" : "#/components/schemas/UsuarioResumoResponse"
           }
         }
       },
@@ -2285,6 +3009,80 @@
           },
           "nome" : {
             "type" : "string"
+          }
+        }
+      },
+      "VistoriaFiltro" : {
+        "type" : "object",
+        "properties" : {
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "projetoId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "q" : {
+            "type" : "string",
+            "maxLength" : 150,
+            "minLength" : 0
+          },
+          "solicitadaAte" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "solicitadaDe" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "status" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "SOLICITADA", "APROVADA", "REPROVADA" ]
+            },
+            "uniqueItems" : true
+          }
+        }
+      },
+      "VistoriaResponse" : {
+        "type" : "object",
+        "properties" : {
+          "atualizadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "cliente" : {
+            "$ref" : "#/components/schemas/ClienteResumoResponse"
+          },
+          "criadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "dataInstalacaoDoProjeto" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataResultado" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "dataSolicitacao" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "projetoId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "SOLICITADA", "APROVADA", "REPROVADA" ]
           }
         }
       }

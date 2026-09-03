@@ -23,6 +23,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
 import com.conectsol.solarsync.common.exception.CredenciaisInvalidasException;
+import com.conectsol.solarsync.common.exception.ProjetoSemInstalacaoException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
 import com.conectsol.solarsync.common.exception.UsuarioNaoAutorizadoException;
 
@@ -68,6 +69,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ClienteComDebitoException.class)
     ProblemDetail clienteComDebito(ClienteComDebitoException excecao) {
         return problema(HttpStatus.CONFLICT, "CLIENTE_COM_DEBITO", excecao.getMessage());
+    }
+
+    @ExceptionHandler(ProjetoSemInstalacaoException.class)
+    ProblemDetail projetoSemInstalacao(ProjetoSemInstalacaoException excecao) {
+        return problema(HttpStatus.CONFLICT, "PROJETO_SEM_INSTALACAO", excecao.getMessage());
     }
 
     @ExceptionHandler(CredenciaisInvalidasException.class)

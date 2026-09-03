@@ -101,6 +101,18 @@ public class ProjetoService {
         projetoRepository.delete(carregar(id));
     }
 
+    /**
+     * Registra a instalação física. Não mexe no status nem valida que o projeto já esteja
+     * aprovado: na prática acontece instalar antes de a Coelba homologar, e travar isso só
+     * faria o analista registrar a data errada em outro lugar.
+     */
+    @Transactional
+    public Projeto registrarInstalacao(Long id, LocalDate dataInstalacao) {
+        Projeto projeto = carregar(id);
+        projeto.setDataInstalacao(dataInstalacao);
+        return projetoRepository.save(projeto);
+    }
+
     @Transactional
     public Projeto aguardarEnvio(Long id, Long usuarioId) {
         return transicionar(carregar(id), StatusProjeto.AGUARDANDO_ENVIO, usuarioId, true);

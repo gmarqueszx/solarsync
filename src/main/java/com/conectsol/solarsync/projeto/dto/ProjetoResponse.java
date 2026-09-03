@@ -20,6 +20,7 @@ public record ProjetoResponse(
         StatusProjeto status,
         String motivoReprova,
         LocalDate dataAprovacao,
+        LocalDate dataInstalacao,
         Instant criadoEm,
         Instant atualizadoEm) {
 
@@ -35,6 +36,7 @@ public record ProjetoResponse(
                 projeto.getStatus(),
                 projeto.getMotivoReprova(),
                 projeto.getDataAprovacao(),
+                projeto.getDataInstalacao(),
                 projeto.getCriadoEm(),
                 projeto.getAtualizadoEm());
     }
