@@ -408,7 +408,19 @@ histórico falha com 409. Desative em vez de apagar — é o caminho previsto.
 | `SOLARSYNC_JWT_SEGREDO` | segredo aleatório no boot + WARN — tokens não sobrevivem a restart (ok em dev, **inaceitável em produção**) |
 | `SOLARSYNC_GOOGLE_CLIENT_ID` | login Google desabilitado |
 | `SOLARSYNC_ADMIN_SENHA_INICIAL` | admin da V3 segue sem senha (só Google) |
+| `SOLARSYNC_DADOS_DE_EXEMPLO` | banco fica vazio (comportamento normal) |
 | `SOLARSYNC_CORS_ORIGENS` | `http://localhost:5173` |
+
+**Dados de exemplo** (`SOLARSYNC_DADOS_DE_EXEMPLO=true`, só em dev): `exemplo/DadosDeExemplo`
+semeia 15 clientes cobrindo todos os estados do fluxo — pendência aberta/em andamento/resolvida/
+cancelada, projeto travado por débito, reprovado, reencaminhado, aprovado, instalado sem
+vistoria, ciclo completo com vistoria reprovada e reaprovada, e as duas filas de unificação.
+<p>
+Passa **pelos services, não por SQL**: é o que faz os eventos dispararem e o
+`historico_status` nascer povoado. Semeando por SQL as telas teriam dados mas o dashboard não
+teria nada para agregar, e a automação "pendência resolvida → cria projeto" não seria
+exercitada. As datas de negócio são retroativas; os timestamps do histórico são do momento da
+semeadura. Idempotente. Para limpar em dev: `docker compose down -v`.
 
 **Primeiro acesso**: a V3 semeia só João Gabriel como ADMINISTRADOR, com `senha_hash` nulo.
 Como o login Google não faz auto-cadastro, sem nada mais **não haveria como entrar**; por isso
