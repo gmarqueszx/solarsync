@@ -1,0 +1,1 @@
+INSERT INTO papel (nome) VALUES ('ADMINISTRADOR'), ('GESTOR'), ('ANALISTA');

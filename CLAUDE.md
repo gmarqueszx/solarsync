@@ -57,7 +57,12 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
 - **Debito** — cliente_id, status (ativo/quitado), última_consulta_em
 - **Projeto** — cliente_id, tipo_projeto (padrão/ampliação/aumento_potência/mudança_inversor/...),
   analista_responsavel_id, data_recebimento, data_art, data_encaminhado, status
-  (encaminhado/aprovado/reprovado/reencaminhado), motivo_reprova, data_aprovacao
+  (`RECEBIDO` → `AGUARDANDO_ENVIO` → `ENCAMINHADO` → `APROVADO` | `REPROVADO` →
+  `REENCAMINHADO`), motivo_reprova, data_aprovacao
+  - `RECEBIDO`: analista recebeu o projeto (status inicial, criado automaticamente quando a
+    pendência do cliente é resolvida) — `data_encaminhado` ainda nula
+  - `AGUARDANDO_ENVIO`: projeto já preenchido, mas ainda não enviado à Coelba (ex.: débito
+    pendente bloqueando o envio)
 - **Vistoria** — projeto_id, data_solicitacao, status (aprovada/reprovada), data_resultado
 - **Unificacao** — cliente_id, cidade, projetista_id, informações, feita (bool), desligamento (bool)
 - **Usuario** / **Papel** / **Permissao** — RBAC (ver seção 4)
@@ -67,10 +72,26 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
   genérico
 
 **Integração entre abas/etapas** (requisito do usuário): a mudança de status de uma entidade
-deve dispara o avanço automático para a próxima. Ex.: `Pendencia.status = RESOLVIDA` cria/ativa
-automaticamente o registro correspondente em `Projeto` com status inicial. Implementar via
-evento de domínio (Spring `ApplicationEventPublisher` ou tabela de outbox) — não hardcoded em
-controller.
+deve disparar o avanço automático para a próxima. Ex.: `Pendencia.status = RESOLVIDA` cria/ativa
+automaticamente o registro correspondente em `Projeto` com status inicial. Implementado via
+evento de domínio (Spring `ApplicationEventPublisher`) — não hardcoded em controller.
+
+**Regra arquitetural (não quebrar)**: toda transição de status passa pelo service do módulo
+(`PendenciaService.atualizarStatus`, `ProjetoService.atualizarStatus`), que é o **único** ponto
+que publica o evento de domínio. Nenhuma mudança de status via `repository.save()` direto.
+Isso é o que faz a automação e a auditoria funcionarem igual independente da origem da mudança
+— tela hoje, e-mail do Gmail ou webhook do Nectar amanhã (ver seção 9).
+
+Desenho dos eventos (implementado):
+
+- `common/event/EntidadeStatusEvent` — interface comum a todos os eventos de status
+- `PendenciaStatusChangedEvent` / `ProjetoStatusChangedEvent` — eventos concretos (`record`),
+  vivem no pacote do módulo que os publica
+- `historico/HistoricoStatusEventListener` — `@EventListener` síncrono sobre a interface
+  genérica; grava em `historico_status` na mesma transação (nunca há transição sem auditoria)
+- `projeto/PendenciaResolvidaListener` — `@TransactionalEventListener(AFTER_COMMIT)`; cria o
+  `Projeto` com status `RECEBIDO` só quando a pendência vira `RESOLVIDA`. Após o commit para
+  não criar projeto órfão se a transação da pendência for revertida
 
 ## 4. RBAC
 
@@ -108,12 +129,21 @@ Todas as métricas abaixo dependem de `HistoricoStatus` com timestamps confiáve
 
 ## 6. Arquitetura técnica
 
-- **Backend**: Java 21, Spring Boot 3.x (Web, Security, Data JPA, Validation), Maven
-- **Banco**: PostgreSQL, migrações com Flyway
-- **Auth**: JWT (access + refresh token), RBAC via `@PreAuthorize`
-- **Frontend**: estilo Navan em paleta verde (ver seção 7) — deve consumir a API via REST/JSON
+- **Backend**: Java 21, Spring Boot 4.1.1 (WebMVC, Security, Data JPA, Validation), Maven
+- **Banco**: PostgreSQL 16, migrações com Flyway (`src/main/resources/db/migration`)
+- **JPA**: `ddl-auto=validate` — divergência entre entidade e migration quebra o boot de
+  propósito; o schema é sempre da migration, nunca do Hibernate
+- **Auth**: JWT (access + refresh token), RBAC via `@PreAuthorize` — ainda não implementado
+- **Testes**: JUnit 5 + AssertJ + Mockito, **Testcontainers com Postgres real** (não H2, porque
+  o schema usa `CHECK`/`GENERATED AS IDENTITY` específicos do Postgres). `mvn test` exige Docker
+  rodando. Atenção Spring Boot 4.1: `@DataJpaTest` e cia. mudaram de pacote
+  (`org.springframework.boot.data.jpa.test.autoconfigure`, `...jdbc.test.autoconfigure`,
+  `...jpa.test.autoconfigure`) e os módulos do Testcontainers 2.x ganharam prefixo
+  (`testcontainers-postgresql`, `testcontainers-junit-jupiter`)
+- **Frontend**: estilo Navan em paleta verde (ver seção 7) — repo separado `solarsync-web`,
+  consome a API via REST/JSON
 - **Infra local**: Docker Compose (API + Postgres), alinhado ao ambiente já usado no VPS Contabo
-- **Estrutura de pacotes sugerida**:
+- **Estrutura de pacotes** (implementada):
   ```
   com.conectsol.solarsync
   ├── cliente
@@ -124,9 +154,12 @@ Todas as métricas abaixo dependem de `HistoricoStatus` com timestamps confiáve
   ├── unificacao
   ├── auth (usuario, papel, permissao, jwt)
   ├── historico (auditoria de status)
-  ├── dashboard
-  └── common (config, exceptions, eventos de domínio)
+  ├── dashboard          (reservado — depende de historico_status povoado)
+  ├── common (config, eventos de domínio)
+  └── integracao         (futuro — nectar, gmail; ver seção 9)
   ```
+  Cada módulo de etapa segue o mesmo padrão: entidade `extends BaseEntity` + enums de status +
+  `JpaRepository` + service (só onde há transição de status a orquestrar).
 
 ## 7. Design system
 
@@ -174,9 +207,30 @@ uma única empresa (ConectSol), não SaaS multi-cliente. Isso muda a prioridade 
 **Resumo prático**: dos 12, os itens 4 e 7 não se aplicam no sentido original (são pensados pra
 SaaS multi-cliente); o 5 é opcional; os outros 9 valem para o SolarSync.
 
-## 9. Próximos passos
+## 9. Integrações externas (fase posterior)
 
-1. Fechar modelo de dados (DDL inicial + Flyway migration V1)
-2. Definir contratos REST (OpenAPI) para cada módulo
-3. Prototipar dashboard com dados mockados até planilha ser migrada
+Objetivo declarado do projeto: sair da planilha 100% manual para um sistema com margem de
+automação. As integrações abaixo **não estão implementadas** — mas o desenho de eventos da
+seção 3 já é o ponto de extensão delas, então nenhuma exige refatoração do domínio.
+
+| Integração | Direção | Como encaixa no desenho atual |
+|---|---|---|
+| **Nectar (CRM)** — criar cliente/projeto quando negócio fecha | Entrada | Webhook do Nectar → chama os services do domínio (`ClienteRepository` + `ProjetoService`), mesmo caminho da tela |
+| **Nectar (CRM)** — refletir status de volta pro comercial | Saída | Novo `@Component` em `integracao/nectar` com `@TransactionalEventListener(AFTER_COMMIT)` sobre `EntidadeStatusEvent`. Zero mudança em `pendencia`/`projeto` |
+| **Gmail** — ler e-mail diário da Coelba (aprovado/reprovado/em análise) | Entrada | Job em `integracao/gmail` faz parsing do e-mail e chama `ProjetoService.atualizarStatus(...)` — o mesmo método que a API usa, então auditoria e automação disparam igual |
+
+Ponto de atenção da etapa 1 do fluxo (seção 1): hoje o analista atualiza pendência resolvida em
+dois lugares (planilha + Trello). O SolarSync elimina a planilha; decidir depois se o Trello
+sai de cena ou vira mais um listener de saída.
+
+## 10. Próximos passos
+
+1. ~~Fechar modelo de dados (DDL inicial + Flyway migration V1)~~ — **feito**: entidades JPA por
+   módulo, `V1__schema_inicial.sql` + `V2__seed_papeis.sql`, eventos de domínio e bateria de
+   testes (Testcontainers com Postgres real; `mvn test` exige Docker rodando)
+2. Definir contratos REST (OpenAPI) para cada módulo — **próximo**; controllers ficaram de fora
+   da fase 1 justamente para não retrabalhar endpoints antes do contrato
+3. Prototipar frontend/dashboard com dados mockados (repo separado: `solarsync-web`)
 4. Escrever script de importação da planilha atual para o banco novo
+5. Spring Security + JWT e a matriz RBAC completa (item 3 da seção 8)
+6. Integrações da seção 9 (Nectar, Gmail)

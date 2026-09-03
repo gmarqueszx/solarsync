@@ -1,15 +1,11 @@
-package com.conectsol.solarsync;
+package com.conectsol.solarsync.common;
 
-import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
+import com.conectsol.solarsync.TestcontainersConfiguration;
+
 @SpringBootTest
 @Import(TestcontainersConfiguration.class)
-class SolarsyncApplicationTests {
-
-	@Test
-	void contextLoads() {
-	}
-
+public abstract class AbstractIntegrationTest {
 }
