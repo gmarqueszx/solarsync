@@ -93,10 +93,21 @@ Desenho dos eventos (implementado):
   `Projeto` com status `RECEBIDO` só quando a pendência vira `RESOLVIDA`. Após o commit para
   não criar projeto órfão se a transação da pendência for revertida
 
+⚠️ **Armadilha do `AFTER_COMMIT` (já custou um bug silencioso)**: todo listener nessa fase que
+escreve no banco **precisa** de `@Transactional(propagation = REQUIRES_NEW)`. Em `AFTER_COMMIT`
+a transação original ainda está ligada à thread, então um `@Transactional` comum (REQUIRED)
+entra nela — já commitada — e o insert é **descartado em silêncio, sem exceção**. Vale para os
+futuros listeners de Nectar/Gmail (seção 9). O `REQUIRES_NEW` vai no listener, não no service:
+o service precisa continuar podendo participar de uma transação existente quando o webhook do
+CRM criar cliente + projeto atomicamente.
+
+Consequência aceita: a criação do Projeto é transação separada da atualização da Pendencia. Se
+falhar, a Pendencia fica `RESOLVIDA` e o fluxo pela metade — o preço de não criar projeto órfão.
+Se isso virar problema real, a saída é outbox com reprocessamento, não voltar ao mesmo commit.
+
 ## 4. RBAC
 
-Hierarquia confirmada (implementação de permissões fica para depois — por ora só a estrutura
-de papéis):
+Hierarquia confirmada:
 
 | Papel | Quem | Acesso |
 |---|---|---|
@@ -104,8 +115,41 @@ de papéis):
 | `GESTOR` | Igor | Acesso total operacional + dashboard exclusivo |
 | `ANALISTA` | Ivan, Larissa, Camila, Nycole e demais | Papel único — CRUD nas etapas do fluxo (pendência, débito, projeto, vistoria, unificação), sem distinção por especialidade dentro do sistema |
 
-Implementação futura: Spring Security + JWT, `@PreAuthorize` por método, tabela
-`papel`/`permissao` muitos-para-muitos com `usuario`. Não é prioridade da primeira fase.
+**Decisão (confirmada com o usuário)**: a autenticação entra **junto com os controllers REST**,
+não depois. Motivo: colocar depois exige revisitar todo controller para pôr `@PreAuthorize` e
+reescrever os testes de controller (que mudam de forma com a segurança ligada); além disso o
+sistema guarda dado de cliente final e informação financeira num VPS exposto à internet, e os
+itens 10–12 do checklist da seção 8 pressupõem que a autenticação existe.
+
+Implementação: Spring Security + JWT (access + refresh), `@PreAuthorize` por método, tabelas
+`papel`/`permissao` N:N com `usuario` (já criadas na V1, papéis semeados na V2).
+
+### Matriz de permissões (item 3 do checklist da seção 8)
+
+Duas decisões de negócio confirmadas com o usuário e refletidas abaixo:
+
+1. **ANALISTA vê todos os clientes**, não só os atribuídos a si. É o que resolve a dor da
+   planilha (visão consolidada; ninguém trava esperando o colega voltar de férias) e dispensa
+   filtro por usuário nas consultas — logo, o RLS do item 5 da seção 8 continua desnecessário.
+2. **ANALISTA não apaga nada.** Registro errado é cancelado por status (ex.: `CANCELADA` em
+   Pendencia), preservando `historico_status` e mantendo as métricas do gestor confiáveis.
+   `DELETE` de verdade fica só com `ADMINISTRADOR`.
+
+| Recurso | Ler | Criar / Editar | Apagar |
+|---|---|---|---|
+| Cliente | todos os papéis | ANALISTA, GESTOR, ADMIN | ADMIN |
+| Pendencia | todos os papéis | ANALISTA, GESTOR, ADMIN | ADMIN |
+| Debito | todos os papéis | ANALISTA, GESTOR, ADMIN | ADMIN |
+| Projeto | todos os papéis | ANALISTA, GESTOR, ADMIN | ADMIN |
+| Vistoria | todos os papéis | ANALISTA, GESTOR, ADMIN | ADMIN |
+| Unificacao | todos os papéis | ANALISTA, GESTOR, ADMIN | ADMIN |
+| `historico_status` | todos os papéis (histórico de um registro); consulta agregada só GESTOR/ADMIN | **ninguém via API** — escrito exclusivamente pelo listener de domínio | ninguém |
+| Dashboard (seção 5) | GESTOR, ADMIN | — | — |
+| Usuário / papéis | ADMIN | ADMIN | ADMIN |
+
+Regra que não pode ser violada: `historico_status` **não tem endpoint de escrita**. É populado
+só pelo `HistoricoStatusEventListener`. Um POST que permita inserir histórico à mão destrói a
+confiabilidade de todas as métricas da seção 5.
 
 ## 5. Dashboard (exclusivo `GESTOR`)
 
@@ -193,9 +237,9 @@ uma única empresa (ConectSol), não SaaS multi-cliente. Isso muda a prioridade 
 |---|---|---|---|
 | 1 | PRD | **Sim** | Este próprio CLAUDE.md cumpre esse papel — manter atualizado a cada decisão |
 | 2 | Mapa do sistema (UML) | **Sim** | Falta gerar: diagrama de classes das entidades da seção 3 e diagrama de sequência do fluxo de status (pendência → projeto → vistoria) |
-| 3 | RBAC (matriz completa) | **Sim, expandir** | Seção 4 define os papéis, mas falta matriz explícita ação × papel (ex.: quem pode editar débito, quem pode ver dashboard) antes de implementar |
+| 3 | RBAC (matriz completa) | **Sim — feito** | Matriz ação × papel fechada na seção 4, incluindo as decisões de escopo do analista e de exclusão. Falta implementar (`@PreAuthorize`), junto com os controllers |
 | 4 | Multi-tenancy | **Não se aplica** | Sistema é de uma empresa só (ConectSol), não atende múltiplos clientes-empresa na mesma base. Não criar isolamento por tenant |
-| 5 | RLS no banco | **Opcional, defesa extra** | Sem multi-tenancy o risco principal muda: RLS aqui serviria só se quiser reforçar "analista só vê clientes atribuídos a si" dentro do próprio Postgres, além do controle no Spring Security. Não é bloqueante, mas vale considerar para o dashboard financeiro (débitos) |
+| 5 | RLS no banco | **Não se aplica mais** | O único caso de uso era reforçar "analista só vê clientes atribuídos a si" — e ficou decidido (seção 4) que ANALISTA vê todos os clientes. Sem restrição por linha a aplicar, RLS não tem o que proteger aqui |
 | 6 | Nenhuma senha no código | **Sim, obrigatório** | `.env` fora do Git, credenciais do Postgres e JWT secret como variável de ambiente no VPS Contabo, nunca commitadas |
 | 7 | Arquitetura modular (liga/desliga por cliente) | **Não se aplica como catálogo comercial** | Não há "clientes-empresa" comprando módulos. Mas a separação em pacotes por etapa (seção 6) já cumpre o espírito de baixo acoplamento entre módulos |
 | 8 | Botão de reportar problema | **Sim, recomendado** | Útil dado que analistas vão operar o sistema diariamente — botão de feedback com captura de tela/contexto ajuda a substituir o "manda áudio de 3 minutos" |
@@ -228,9 +272,12 @@ sai de cena ou vira mais um listener de saída.
 1. ~~Fechar modelo de dados (DDL inicial + Flyway migration V1)~~ — **feito**: entidades JPA por
    módulo, `V1__schema_inicial.sql` + `V2__seed_papeis.sql`, eventos de domínio e bateria de
    testes (Testcontainers com Postgres real; `mvn test` exige Docker rodando)
-2. Definir contratos REST (OpenAPI) para cada módulo — **próximo**; controllers ficaram de fora
-   da fase 1 justamente para não retrabalhar endpoints antes do contrato
+2. **Próximo**: contratos REST (OpenAPI) + controllers **com Spring Security/JWT e
+   `@PreAuthorize` já aplicados** — decidido na seção 4 que a autenticação entra junto, não
+   depois. Recorte sugerido: começar por Pendências e Projetos (coração operacional, onde a
+   automação de avanço já existe e dá para provar o fluxo ponta a ponta via HTTP); Débito,
+   Vistoria e Unificação seguem o mesmo padrão; Dashboard por último, pois depende de
+   `historico_status` povoado
 3. Prototipar frontend/dashboard com dados mockados (repo separado: `solarsync-web`)
 4. Escrever script de importação da planilha atual para o banco novo
-5. Spring Security + JWT e a matriz RBAC completa (item 3 da seção 8)
-6. Integrações da seção 9 (Nectar, Gmail)
+5. Integrações da seção 9 (Nectar, Gmail)

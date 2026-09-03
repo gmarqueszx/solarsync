@@ -9,6 +9,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.conectsol.solarsync.auth.Usuario;
+import com.conectsol.solarsync.auth.UsuarioRepository;
 import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
 import com.conectsol.solarsync.common.AbstractIntegrationTest;
@@ -30,6 +32,9 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
     private ClienteRepository clienteRepository;
 
     @Autowired
+    private UsuarioRepository usuarioRepository;
+
+    @Autowired
     private PendenciaRepository pendenciaRepository;
 
     @Autowired
@@ -46,20 +51,26 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
         historicoStatusRepository.deleteAll();
         projetoRepository.deleteAll();
         pendenciaRepository.deleteAll();
+        usuarioRepository.deleteAll();
         clienteRepository.deleteAll();
     }
 
     @Test
     void resolverPendenciaCriaProjetoEAuditaAsDuasTransicoes() {
         Cliente cliente = clienteRepository.save(Cliente.builder().nome("Cliente Integração").build());
+        Usuario analista = usuarioRepository.save(Usuario.builder()
+                .nome("Analista Teste")
+                .email("analista.teste@conectsol.com")
+                .build());
         Pendencia pendencia = pendenciaRepository.save(Pendencia.builder()
                 .cliente(cliente)
                 .tipo(TipoPendencia.LIGACAO_NOVA)
                 .status(StatusPendencia.EM_ANDAMENTO)
                 .solicitadoEm(Instant.now())
+                .responsavel(analista)
                 .build());
 
-        pendenciaService.atualizarStatus(pendencia.getId(), StatusPendencia.RESOLVIDA, 1L);
+        pendenciaService.atualizarStatus(pendencia.getId(), StatusPendencia.RESOLVIDA, analista.getId());
 
         List<Projeto> projetosDoCliente = projetoRepository.findByClienteId(cliente.getId());
         assertThat(projetosDoCliente).hasSize(1);
