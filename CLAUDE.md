@@ -54,15 +54,18 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
 
 - **Cliente** — nome, cidade, vendedor, data_pagamento
 - **Pendencia** — cliente_id, tipo, status, solicitado_em, resolvido_em, responsavel_id, observação
-- **Debito** — cliente_id, status (ativo/quitado), última_consulta_em
+- **Debito** — cliente_id, status (ativo/quitado), última_consulta_em. Um registro por cliente
+  (constraint no banco): é o retrato da última consulta na agência virtual, não um lançamento
+  contábil. Reconsultar atualiza o mesmo registro, e o vai-e-vem fica em `historico_status`
 - **Projeto** — cliente_id, tipo_projeto (padrão/ampliação/aumento_potência/mudança_inversor/...),
   analista_responsavel_id, data_recebimento, data_art, data_encaminhado, status
   (`RECEBIDO` → `AGUARDANDO_ENVIO` → `ENCAMINHADO` → `APROVADO` | `REPROVADO` →
   `REENCAMINHADO`), motivo_reprova, data_aprovacao
   - `RECEBIDO`: analista recebeu o projeto (status inicial, criado automaticamente quando a
     pendência do cliente é resolvida) — `data_encaminhado` ainda nula
-  - `AGUARDANDO_ENVIO`: projeto já preenchido, mas ainda não enviado à Coelba (ex.: débito
-    pendente bloqueando o envio)
+  - `AGUARDANDO_ENVIO`: projeto já preenchido, mas ainda não enviado à Coelba por algum motivo
+    operacional. **Não é o estado do cliente com débito**: débito não pausa o projeto, ele
+    bloqueia o envio (ver "Débito" abaixo)
 - **Vistoria** — projeto_id, data_solicitacao, status (aprovada/reprovada), data_resultado
 - **Unificacao** — cliente_id, cidade, projetista_id, informações, feita (bool), desligamento (bool)
 - **Usuario** / **Papel** / **Permissao** — RBAC (ver seção 4)
@@ -272,6 +275,17 @@ Cada item abaixo quebrou o build ou a aplicação neste projeto — não confie 
   barra o que corromperia o dashboard, como aprovar projeto nunca encaminhado. Válvula de
   escape: `POST /api/projetos/{id}/corrigir-status`, só ADMIN, com justificativa, mantendo a
   auditoria — necessária para a importação da planilha, onde os dados chegam fora de ordem.
+- **Débito bloqueia o envio, não o projeto** (decisão do usuário). O projeto nasce e existe em
+  `RECEBIDO` mesmo com o cliente devendo — é assim que o gestor vê o cliente travado e o
+  dashboard consegue medir há quanto tempo, em vez de o cliente desaparecer da tela. O que
+  falha é `/encaminhar` e `/reencaminhar`, com **409 `CLIENTE_COM_DEBITO`**. A guarda está em
+  `ProjetoService`, não no controller, para valer também quando a origem for o Gmail ou o CRM.
+  Cliente sem nenhuma consulta registrada conta como sem débito — barrar por falta de consulta
+  travaria todo cliente novo.
+- `Debito` publica `DebitoStatusChangedEvent`, e é do `historico_status` que sai a métrica
+  "tempo médio parado por débito" (subtraindo `null → ATIVO` de `ATIVO → QUITADO`) — sem
+  precisar de colunas de data extra. Reconsultar e achar a mesma situação **não** publica
+  evento: só atualiza `ultima_consulta_em`, senão o tempo parado seria recontado a cada consulta.
 - Erros em **`ProblemDetail` (RFC 9457)** com a propriedade `codigo` (string estável para o
   frontend ramificar sem parsear texto) e `erros[]` nas falhas de validação. O `SecurityConfig`
   delega 401/403 do filtro ao `handlerExceptionResolver`, então erro de filtro e erro de
@@ -393,13 +407,16 @@ existe o `AdminBootstrap`, que aplica `SOLARSYNC_ADMIN_SENHA_INICIAL` ao admin u
 1. ~~Modelo de dados + eventos de domínio~~ — **feito** (fase 1)
 2. ~~Contratos REST/OpenAPI + controllers de Pendências e Projetos, com JWT e RBAC~~ —
    **feito** (fase 2): mais Clientes e Usuários, contrato em `docs/api/openapi.json`
-3. **Próximo**: mesmos padrões para **Débito, Vistoria e Unificação** (as etapas 2 e 4 do fluxo
-   que faltam). Débito é o mais valioso: destrava a transição
-   `AGUARDANDO_ENVIO → ENCAMINHADO`, hoje manual
-4. **Dashboard** (seção 5) — só depois que houver `historico_status` com volume real
-5. Frontend `solarsync-web` consumindo o contrato de `docs/api/openapi.json`
-6. Script de importação da planilha (usar `POST /api/projetos/{id}/corrigir-status` para os
+3. ~~Débito (etapa 2)~~ — **feito**: `PUT /api/debitos/cliente/{clienteId}` registra a consulta,
+   e débito ativo bloqueia o envio à Coelba com 409
+4. **Próximo**: **Vistoria e Unificação** (etapa 4 do fluxo). A regra de negócio a definir com o
+   usuário é o gatilho da vistoria: projeto aprovado + instalação feita → solicitar vistoria.
+   Falta saber onde a data de instalação entra, já que ela não existe no modelo e a métrica
+   "tempo médio para solicitar vistoria pós-instalação" depende dela
+5. **Dashboard** (seção 5) — só depois que houver `historico_status` com volume real
+6. Frontend `solarsync-web` consumindo o contrato de `docs/api/openapi.json`
+7. Script de importação da planilha (usar `POST /api/projetos/{id}/corrigir-status` para os
    registros que chegam fora de ordem)
-7. Antes de ir ao ar: rate limit no `/api/auth/login` (item 11 do checklist — sem ele o BCrypt
+8. Antes de ir ao ar: rate limit no `/api/auth/login` (item 11 do checklist — sem ele o BCrypt
    é vetor de DoS), HTTPS/TLS (item 12) e a auditoria de segurança (item 10)
-8. Integrações da seção 9 (Nectar, Gmail)
+9. Integrações da seção 9 (Nectar, Gmail)

@@ -14,7 +14,9 @@ import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.auth.UsuarioRepository;
 import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
+import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
+import com.conectsol.solarsync.debito.DebitoService;
 import com.conectsol.solarsync.projeto.dto.ProjetoAtualizarRequest;
 import com.conectsol.solarsync.projeto.dto.ProjetoCriarRequest;
 import com.conectsol.solarsync.projeto.dto.ProjetoFiltro;
@@ -43,6 +45,7 @@ public class ProjetoService {
     private final ProjetoRepository projetoRepository;
     private final ClienteRepository clienteRepository;
     private final UsuarioRepository usuarioRepository;
+    private final DebitoService debitoService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
@@ -107,6 +110,7 @@ public class ProjetoService {
     public Projeto encaminhar(Long id, LocalDate dataArt, LocalDate dataEncaminhado,
             Long usuarioId) {
         Projeto projeto = carregar(id);
+        exigirClienteSemDebito(projeto);
         if (dataArt != null) {
             projeto.setDataArt(dataArt);
         }
@@ -117,8 +121,25 @@ public class ProjetoService {
     @Transactional
     public Projeto reencaminhar(Long id, LocalDate dataEncaminhado, Long usuarioId) {
         Projeto projeto = carregar(id);
+        exigirClienteSemDebito(projeto);
         projeto.setDataEncaminhado(dataEncaminhado == null ? LocalDate.now() : dataEncaminhado);
         return transicionar(projeto, StatusProjeto.REENCAMINHADO, usuarioId, true);
+    }
+
+    /**
+     * Etapa 2 do fluxo: "sem débito, o projeto é preenchido e enviado à Coelba". A guarda fica
+     * aqui, e não no controller, para valer também quando a origem for a leitura de e-mail ou
+     * um webhook do CRM.
+     * <p>
+     * Barra apenas o envio à Coelba. O projeto continua nascendo e existindo em RECEBIDO mesmo
+     * com o cliente devendo — é assim que o gestor vê o cliente travado e o dashboard consegue
+     * medir há quanto tempo, em vez de o cliente simplesmente desaparecer da tela.
+     */
+    private void exigirClienteSemDebito(Projeto projeto) {
+        Long clienteId = projeto.getCliente().getId();
+        if (debitoService.clienteTemDebitoAtivo(clienteId)) {
+            throw new ClienteComDebitoException(clienteId);
+        }
     }
 
     @Transactional

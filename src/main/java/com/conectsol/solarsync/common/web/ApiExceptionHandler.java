@@ -21,6 +21,7 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
 import com.conectsol.solarsync.common.exception.CredenciaisInvalidasException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
 import com.conectsol.solarsync.common.exception.UsuarioNaoAutorizadoException;
@@ -62,6 +63,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(TransicaoStatusInvalidaException.class)
     ProblemDetail transicaoInvalida(TransicaoStatusInvalidaException excecao) {
         return problema(HttpStatus.CONFLICT, "TRANSICAO_INVALIDA", excecao.getMessage());
+    }
+
+    @ExceptionHandler(ClienteComDebitoException.class)
+    ProblemDetail clienteComDebito(ClienteComDebitoException excecao) {
+        return problema(HttpStatus.CONFLICT, "CLIENTE_COM_DEBITO", excecao.getMessage());
     }
 
     @ExceptionHandler(CredenciaisInvalidasException.class)

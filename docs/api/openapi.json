@@ -16,6 +16,9 @@
     "description" : "Cadastro base do fluxo de homologação",
     "name" : "Clientes"
   }, {
+    "description" : "Etapa 2: situação de débito do cliente na Coelba",
+    "name" : "Débitos"
+  }, {
     "description" : "Etapa 1: pendências do cliente na Coelba",
     "name" : "Pendências"
   }, {
@@ -286,6 +289,160 @@
           }
         },
         "tags" : [ "Clientes" ]
+      }
+    },
+    "/api/debitos" : {
+      "get" : {
+        "description" : "Filtre por status=ATIVO para ver quem está travado, ou use consultadoAntesDe para achar consultas velhas que valem refazer.",
+        "operationId" : "listar_4",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "filtro",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/DebitoFiltro"
+          }
+        }, {
+          "in" : "query",
+          "name" : "paginacao",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/components/schemas/Pageable"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaginaResponseDebitoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Lista as situações de débito conhecidas",
+        "tags" : [ "Débitos" ]
+      }
+    },
+    "/api/debitos/cliente/{clienteId}" : {
+      "get" : {
+        "operationId" : "buscarPorCliente",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "clienteId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DebitoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Situação de débito de um cliente",
+        "tags" : [ "Débitos" ]
+      },
+      "put" : {
+        "description" : "Enquanto o status for ATIVO, encaminhar o projeto do cliente à Coelba é bloqueado com 409. Reconsultar e achar a mesma situação só atualiza a data, sem gerar linha nova de histórico.",
+        "operationId" : "registrarConsulta",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "clienteId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DebitoRegistrarRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DebitoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Registra o resultado da consulta de débito",
+        "tags" : [ "Débitos" ]
+      }
+    },
+    "/api/debitos/{id}" : {
+      "delete" : {
+        "description" : "Restrito a ADMINISTRADOR. O caminho normal é registrar QUITADO, que preserva o histórico.",
+        "operationId" : "excluir_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK"
+          }
+        },
+        "summary" : "Exclui o registro de débito",
+        "tags" : [ "Débitos" ]
+      }
+    },
+    "/api/debitos/{id}/historico" : {
+      "get" : {
+        "description" : "É desta linha do tempo que sai a métrica de tempo parado por débito.",
+        "operationId" : "historico_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/HistoricoStatusResponse"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Linha do tempo do débito",
+        "tags" : [ "Débitos" ]
       }
     },
     "/api/pendencias" : {
@@ -1344,6 +1501,74 @@
         },
         "required" : [ "justificativa", "novoStatus" ]
       },
+      "DebitoFiltro" : {
+        "type" : "object",
+        "properties" : {
+          "clienteId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "consultadoAntesDe" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "q" : {
+            "type" : "string",
+            "maxLength" : 150,
+            "minLength" : 0
+          },
+          "status" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "ATIVO", "QUITADO" ]
+            },
+            "uniqueItems" : true
+          }
+        }
+      },
+      "DebitoRegistrarRequest" : {
+        "type" : "object",
+        "properties" : {
+          "consultadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "ATIVO", "QUITADO" ]
+          }
+        },
+        "required" : [ "status" ]
+      },
+      "DebitoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "atualizadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "cliente" : {
+            "$ref" : "#/components/schemas/ClienteResumoResponse"
+          },
+          "criadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "ATIVO", "QUITADO" ]
+          },
+          "ultimaConsultaEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
       "DefinirSenhaRequest" : {
         "type" : "object",
         "properties" : {
@@ -1460,6 +1685,36 @@
             "type" : "array",
             "items" : {
               "$ref" : "#/components/schemas/ClienteResponse"
+            }
+          },
+          "pagina" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "tamanho" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "totalElementos" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "totalPaginas" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "ultima" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "PaginaResponseDebitoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "conteudo" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/DebitoResponse"
             }
           },
           "pagina" : {

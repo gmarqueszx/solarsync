@@ -3,7 +3,11 @@ package com.conectsol.solarsync.projeto;
 public enum StatusProjeto {
     /** Analista recebeu o projeto. Criado automaticamente quando a pendência é resolvida. */
     RECEBIDO,
-    /** Projeto preenchido, mas ainda não enviado à Coelba (ex.: débito pendente do cliente). */
+    /**
+     * Projeto preenchido, mas ainda não enviado à Coelba por algum motivo operacional. Não é o
+     * estado do cliente devedor: débito não pausa o projeto, ele impede o envio — ver
+     * {@code ProjetoService.exigirClienteSemDebito}.
+     */
     AGUARDANDO_ENVIO,
     ENCAMINHADO,
     APROVADO,
@@ -11,9 +15,9 @@ public enum StatusProjeto {
     REENCAMINHADO;
 
     /**
-     * Transições permitidas. Pular {@code AGUARDANDO_ENVIO} é legítimo — aquele estado só
-     * existe quando algo bloqueia o envio. {@code APROVADO → REPROVADO} existe porque a Coelba
-     * revisa decisão.
+     * Transições permitidas. Pular {@code AGUARDANDO_ENVIO} é o caminho normal — aquele estado
+     * só aparece quando algo atrasa o envio. {@code APROVADO → REPROVADO} existe porque a
+     * Coelba revisa decisão.
      * <p>
      * O que a guarda impede é o que quebra o dashboard: aprovar um projeto que nunca foi
      * encaminhado gravaria {@code data_aprovacao} com {@code data_encaminhado} nulo, e a
