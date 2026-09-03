@@ -53,7 +53,12 @@ public class AdminBootstrap implements ApplicationRunner {
 
     private void definirSenhaSeAusente(Usuario admin) {
         if (admin.getSenhaHash() != null) {
-            log.debug("Admin {} já tem senha definida; nada a fazer.", admin.getEmail());
+            // Em INFO, e não DEBUG, de propósito: pular em silêncio faz quem configurou uma
+            // senha nova achar que ela vale e levar 401 sem entender o motivo.
+            log.info("Admin {} já tem senha definida; a senha-inicial configurada foi IGNORADA "
+                    + "(esta guarda existe para não resetar senha a cada restart). Para trocar, "
+                    + "use POST /api/usuarios/{}/senha, ou recrie o banco em dev com "
+                    + "'docker compose down -v'.", admin.getEmail(), admin.getId());
             return;
         }
         admin.setSenhaHash(passwordEncoder.encode(senhaInicial));

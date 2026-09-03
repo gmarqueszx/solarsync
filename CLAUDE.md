@@ -234,6 +234,11 @@ Cada item abaixo quebrou o build ou a aplicação neste projeto — não confie 
   quebraria todo `@WebMvcTest`. Fica em `common/config/JpaAuditingConfig`, importada
   explicitamente pelo `@RepositoryTest` (o slice do `@DataJpaTest` não faz scan de
   `@Configuration`).
+- **`./config/application.properties` é lido pelos testes também**, e com precedência maior que
+  o classpath — então valor de conveniência de desenvolvimento vaza para dentro do Testcontainers
+  (ligar `solarsync.dados-de-exemplo` ali quebrou 14 testes que conferem contagem). Todo
+  `@SpringBootTest` precisa de `properties = "solarsync.dados-de-exemplo=false"`; está explicado
+  em `common.AbstractIntegrationTest`.
 - **Não** criar `src/test/resources/application.properties`: um arquivo com esse nome
   **sombreia** o `application.properties` principal em vez de complementá-lo, e a configuração
   real deixa de ser validada pelos testes — foi assim que a propriedade Jackson inválida passou
@@ -424,9 +429,22 @@ semeadura. Idempotente. Para limpar em dev: `docker compose down -v`.
 
 **Primeiro acesso**: a V3 semeia só João Gabriel como ADMINISTRADOR, com `senha_hash` nulo.
 Como o login Google não faz auto-cadastro, sem nada mais **não haveria como entrar**; por isso
-existe o `AdminBootstrap`, que aplica `SOLARSYNC_ADMIN_SENHA_INICIAL` ao admin uma única vez
-(nunca sobrescreve senha já definida). Os demais usuários são cadastrados por ele em
-`POST /api/usuarios`.
+existe o `AdminBootstrap`, que aplica `solarsync.admin.senha-inicial` ao admin uma única vez.
+Os demais usuários são cadastrados por ele em `POST /api/usuarios`.
+
+⚠️ O bootstrap **nunca sobrescreve senha já definida** — a guarda existe para não resetar a
+senha a cada restart. Consequência prática: trocar o valor configurado num banco que já tem
+senha **não tem efeito**, e o login com a senha nova dá 401. O log avisa em INFO. Para trocar
+de verdade, use `POST /api/usuarios/{id}/senha`; em dev, `docker compose down -v` recria tudo.
+
+### Rodando local
+
+Criar `config/application.properties` (a pasta `config/` está no `.gitignore`; use o
+`.env.example` como referência dos nomes). O Spring Boot lê esse arquivo **automaticamente** —
+sem profile e sem variável de ambiente —, então `./mvnw spring-boot:run` já sobe pronto, com
+segredo JWT fixo (token sobrevive a restart), senha de admin e dados de exemplo. É o caminho
+recomendado: evita depender de sintaxe de variável de ambiente, que difere entre PowerShell e
+Bash. Cuidado com o efeito colateral desse arquivo nos testes, descrito na seção 6.
 
 ## 11. Próximos passos
 

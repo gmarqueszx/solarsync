@@ -38,3 +38,7 @@ build/
 .env.*
 !.env.example
 *.pem
+
+# Configuração local de desenvolvimento. O Spring Boot lê ./config/application.properties
+# automaticamente (sem profile nem variável de ambiente) e ela sobrepõe a do classpath.
+config/
