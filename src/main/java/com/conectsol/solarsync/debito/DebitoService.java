@@ -80,7 +80,7 @@ public class DebitoService {
                     .ultimaConsultaEm(consultadoEm)
                     .build());
 
-            publicar(novo, null, requisicao.status(), usuarioId);
+            publicar(novo, null, requisicao.status(), consultadoEm, usuarioId);
             return novo;
         }
 
@@ -95,7 +95,7 @@ public class DebitoService {
 
         debito.setStatus(requisicao.status());
         Debito salvo = debitoRepository.save(debito);
-        publicar(salvo, statusAnterior, requisicao.status(), usuarioId);
+        publicar(salvo, statusAnterior, requisicao.status(), consultadoEm, usuarioId);
         return salvo;
     }
 
@@ -105,10 +105,17 @@ public class DebitoService {
                 .orElseThrow(() -> new EntityNotFoundException("Débito não encontrado: " + id)));
     }
 
+    /**
+     * O {@code ocorridoEm} do evento é a data da <b>consulta</b>, não a de quando alguém
+     * digitou. A situação de débito mudou quando o analista a constatou na agência virtual —
+     * registrar o instante da digitação faria a métrica "tempo parado por débito" medir a
+     * agilidade de digitação em vez do tempo real de cobrança, e zeraria a métrica em toda
+     * importação retroativa.
+     */
     private void publicar(Debito debito, StatusDebito anterior, StatusDebito novo,
-            Long usuarioId) {
+            Instant consultadoEm, Long usuarioId) {
         eventPublisher.publishEvent(new DebitoStatusChangedEvent(
                 debito.getId(), debito.getCliente().getId(), anterior, novo,
-                Instant.now(), usuarioId));
+                consultadoEm, usuarioId));
     }
 }

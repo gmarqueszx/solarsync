@@ -194,6 +194,28 @@ Todas as métricas abaixo dependem de `HistoricoStatus` com timestamps confiáve
 | Quantitativo: projetos reprovados | `COUNT(Projeto WHERE status = REPROVADO)` |
 | Quantitativo: vistorias solicitadas | `COUNT(Vistoria)` |
 
+### Implementação (feito)
+
+`GET /api/dashboard?de=&ate=` devolve as 13 métricas numa resposta só — a tela mostra todas
+juntas, e 13 rotas fariam o frontend orquestrar 13 chamadas para montar uma página. Restrito a
+GESTOR e ADMINISTRADOR (`@SomenteGestor`): o dashboard expõe o desempenho por analista, e não é
+informação que o próprio analista precisa ver.
+
+- **Cada métrica é recortada pela sua própria data de referência** — aprovados pela data de
+  aprovação, resolvidas pela data de resolução. É o que responde "no período X, como foi o
+  desempenho", em vez de misturar recortes.
+- **Tempo médio nulo ≠ zero**: nulo significa "não houve caso no período". Devolver 0 faria o
+  gestor ler "instantâneo" onde não há dado.
+- `clientesComDebitoAtivo` **ignora o período** de propósito: é a situação de agora, "quantos
+  estão travados neste momento".
+- `projetosReprovados` sai do `historico_status`, porque não existe coluna de data de reprova.
+- Agregações em SQL nativo (`DashboardRepository`), não em Java: calcular média carregando todas
+  as linhas para memória não escala.
+- ⚠️ O `ocorrido_em` do evento de débito é a **data da consulta**, não a da digitação. Registrar
+  o instante da digitação faria a métrica de tempo parado medir agilidade de digitação, e a
+  zeraria em qualquer importação retroativa — foi o que aconteceu com os dados de exemplo antes
+  da correção.
+
 ## 6. Arquitetura técnica
 
 - **Backend**: Java 21, Spring Boot 4.1.1 (WebMVC, Security, Data JPA, Validation), Maven
@@ -455,11 +477,9 @@ Bash. Cuidado com o efeito colateral desse arquivo nos testes, descrito na seç�
    e débito ativo bloqueia o envio à Coelba com 409
 4. ~~Vistoria e Unificação (etapa 4)~~ — **feito**: `data_instalacao` no Projeto (entrada
    manual), vistoria só depois da instalação, e as duas filas de unificação por filtro
-5. **Próximo**: **Dashboard** (seção 5). Todos os marcos de que as métricas precisam já estão
-   sendo gravados em `historico_status` — falta só agregar. Depende de ter volume de dado real,
-   então a importação da planilha (passo 7) pode vir antes para o gestor ver número que
-   signifique algo
-6. Frontend `solarsync-web` consumindo o contrato de `docs/api/openapi.json`
+5. ~~Dashboard (seção 5)~~ — **feito**: `GET /api/dashboard?de=&ate=`, as 13 métricas numa
+   resposta só, restrito a GESTOR/ADMIN
+6. **Próximo**: Frontend `solarsync-web` consumindo o contrato de `docs/api/openapi.json`
 7. Script de importação da planilha (usar `POST /api/projetos/{id}/corrigir-status` para os
    registros que chegam fora de ordem)
 8. Antes de ir ao ar: rate limit no `/api/auth/login` (item 11 do checklist — sem ele o BCrypt

@@ -31,6 +31,9 @@
     "description" : "Etapa 4: vistoria da Coelba após a instalação",
     "name" : "Vistorias"
   }, {
+    "description" : "Métricas gerenciais — restrito a GESTOR e ADMINISTRADOR",
+    "name" : "Dashboard"
+  }, {
     "description" : "Etapas 2 e 3: homologação e acompanhamento na Coelba",
     "name" : "Projetos"
   }, {
@@ -295,6 +298,43 @@
           }
         },
         "tags" : [ "Clientes" ]
+      }
+    },
+    "/api/dashboard" : {
+      "get" : {
+        "description" : "As 13 métricas numa resposta só. Cada uma é filtrada pela sua própria data de referência — projetos aprovados pela data de aprovação, pendências resolvidas pela data de resolução —, respondendo \"no período X, como foi o desempenho\".\n\nTempos são médias em dias e podem vir nulos: nulo é \"não houve caso no período\", diferente de zero. A única exceção ao filtro é clientesComDebitoAtivo, que é a situação de agora — quantos clientes estão travados neste momento.\n\nSem de/ate, considera todo o histórico.",
+        "operationId" : "metricas",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "de",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }, {
+          "in" : "query",
+          "name" : "ate",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        } ],
+        "responses" : {
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DashboardResponse"
+                }
+              }
+            },
+            "description" : "ANALISTA não tem acesso ao dashboard"
+          }
+        },
+        "summary" : "Métricas de tempo de ciclo e quantitativos do período",
+        "tags" : [ "Dashboard" ]
       }
     },
     "/api/debitos" : {
@@ -2030,6 +2070,20 @@
         },
         "required" : [ "justificativa", "novoStatus" ]
       },
+      "DashboardResponse" : {
+        "type" : "object",
+        "properties" : {
+          "periodo" : {
+            "$ref" : "#/components/schemas/Periodo"
+          },
+          "quantitativos" : {
+            "$ref" : "#/components/schemas/Quantitativos"
+          },
+          "temposMediosEmDias" : {
+            "$ref" : "#/components/schemas/TemposMediosEmDias"
+          }
+        }
+      },
       "DebitoFiltro" : {
         "type" : "object",
         "properties" : {
@@ -2552,6 +2606,19 @@
           }
         }
       },
+      "Periodo" : {
+        "type" : "object",
+        "properties" : {
+          "ate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "de" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }
+      },
       "ProjetoAprovarRequest" : {
         "type" : "object",
         "properties" : {
@@ -2767,6 +2834,35 @@
           }
         }
       },
+      "Quantitativos" : {
+        "type" : "object",
+        "properties" : {
+          "clientesComDebitoAtivo" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "pendenciasResolvidas" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "projetosAprovados" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "projetosEncaminhados" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "projetosReprovados" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "vistoriasSolicitadas" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
       "RefreshRequest" : {
         "type" : "object",
         "properties" : {
@@ -2809,6 +2905,39 @@
           }
         },
         "required" : [ "projetoId" ]
+      },
+      "TemposMediosEmDias" : {
+        "type" : "object",
+        "properties" : {
+          "cicloCompleto" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "envioAteAprovacao" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "instalacaoAteSolicitarVistoria" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "paradoPorDebito" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "recebimentoAteEnvio" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "resolucaoDePendencia" : {
+            "type" : "number",
+            "format" : "double"
+          },
+          "semNinguemMexerNoCliente" : {
+            "type" : "number",
+            "format" : "double"
+          }
+        }
       },
       "TokenResponse" : {
         "type" : "object",
