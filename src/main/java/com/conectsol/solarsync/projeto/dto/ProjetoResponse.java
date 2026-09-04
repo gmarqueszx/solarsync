@@ -1,5 +1,6 @@
 package com.conectsol.solarsync.projeto.dto;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -21,6 +22,7 @@ public record ProjetoResponse(
         String motivoReprova,
         LocalDate dataAprovacao,
         LocalDate dataInstalacao,
+        BigDecimal potenciaKwp,
         Instant criadoEm,
         Instant atualizadoEm) {
 
@@ -37,6 +39,7 @@ public record ProjetoResponse(
                 projeto.getMotivoReprova(),
                 projeto.getDataAprovacao(),
                 projeto.getDataInstalacao(),
+                projeto.getPotenciaKwp(),
                 projeto.getCriadoEm(),
                 projeto.getAtualizadoEm());
     }

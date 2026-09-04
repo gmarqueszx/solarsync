@@ -81,7 +81,8 @@ public class DadosDeExemplo implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments argumentos) {
-        if (clienteRepository.findByNomeContainingIgnoreCase(CLIENTE_MARCADOR,
+        if (clienteRepository.findByNomeContainingIgnoreCaseOrUcCoelbaContainingIgnoreCase(
+                CLIENTE_MARCADOR, CLIENTE_MARCADOR,
                 org.springframework.data.domain.Pageable.ofSize(1)).hasContent()) {
             log.info("Dados de exemplo já presentes; nada a semear.");
             return;
@@ -101,8 +102,8 @@ public class DadosDeExemplo implements ApplicationRunner {
         Long camila = analistas.get(2);
 
         // 1. Cliente recém-pago, ninguém tocou ainda: alimenta a métrica de tempo sem interação.
-        clienteService.criar(new ClienteRequest(
-                "Ana Paula Rocha (exemplo)", "Salvador", "Vendedor Bruno", hojeMenos(3)));
+        clienteService.criar(new ClienteRequest("Ana Paula Rocha (exemplo)", "Salvador",
+                "Vendedor Bruno", hojeMenos(3), "3001234501", "(71) 99100-0001"));
 
         // 2. Pendência aberta, aguardando a Coelba.
         Long semAcao = criarCliente("Carlos Eduardo Lima (exemplo)", "Lauro de Freitas", 12);
@@ -134,14 +135,14 @@ public class DadosDeExemplo implements ApplicationRunner {
         // 6. Cliente com débito: projeto existe e está travado (encaminhar dá 409).
         Long comDebito = criarCliente("Marcos Vinícius Dias (exemplo)", "Salvador", 40);
         Projeto projetoTravado = projetoService.criar(new ProjetoCriarRequest(
-                comDebito, TipoProjeto.PADRAO, larissa, hojeMenos(35), null), admin);
+                comDebito, TipoProjeto.PADRAO, larissa, hojeMenos(35), null, new java.math.BigDecimal("8.40")), admin);
         debitoService.registrarConsulta(comDebito,
                 new DebitoRegistrarRequest(StatusDebito.ATIVO, instanteMenos(34)), larissa);
 
         // 7. Débito quitado e projeto já encaminhado à Coelba.
         Long quitado = criarCliente("Patrícia Nunes (exemplo)", "Camaçari", 60);
         Projeto projetoEncaminhado = projetoService.criar(new ProjetoCriarRequest(
-                quitado, TipoProjeto.AMPLIACAO, camila, hojeMenos(55), hojeMenos(50)), admin);
+                quitado, TipoProjeto.AMPLIACAO, camila, hojeMenos(55), hojeMenos(50), new java.math.BigDecimal("12.60")), admin);
         debitoService.registrarConsulta(quitado,
                 new DebitoRegistrarRequest(StatusDebito.ATIVO, instanteMenos(54)), camila);
         debitoService.registrarConsulta(quitado,
@@ -151,7 +152,7 @@ public class DadosDeExemplo implements ApplicationRunner {
         // 8. Projeto reprovado pela Coelba, aguardando correção.
         Long reprovado = criarCliente("Diego Ferreira (exemplo)", "Salvador", 70);
         Projeto projetoReprovado = projetoService.criar(new ProjetoCriarRequest(
-                reprovado, TipoProjeto.AUMENTO_POTENCIA, ivan, hojeMenos(65), hojeMenos(62)),
+                reprovado, TipoProjeto.AUMENTO_POTENCIA, ivan, hojeMenos(65), hojeMenos(62), new java.math.BigDecimal("5.20")),
                 admin);
         projetoService.encaminhar(projetoReprovado.getId(), hojeMenos(62), hojeMenos(60), ivan);
         projetoService.reprovar(projetoReprovado.getId(),
@@ -161,7 +162,7 @@ public class DadosDeExemplo implements ApplicationRunner {
         Long reencaminhado = criarCliente("Luciana Barbosa (exemplo)", "Feira de Santana", 90);
         Projeto projetoAprovado = projetoService.criar(new ProjetoCriarRequest(
                 reencaminhado, TipoProjeto.MUDANCA_INVERSOR, larissa, hojeMenos(85),
-                hojeMenos(82)), admin);
+                hojeMenos(82), new java.math.BigDecimal("24.00")), admin);
         projetoService.encaminhar(projetoAprovado.getId(), hojeMenos(82), hojeMenos(80), larissa);
         projetoService.reprovar(projetoAprovado.getId(), "Divergência na potência declarada",
                 larissa);
@@ -171,7 +172,7 @@ public class DadosDeExemplo implements ApplicationRunner {
         // 10. Instalado e esperando vistoria: a fila de trabalho da etapa 4.
         Long instalado = criarCliente("Thiago Ramos (exemplo)", "Salvador", 120);
         Projeto projetoInstalado = projetoService.criar(new ProjetoCriarRequest(
-                instalado, TipoProjeto.PADRAO, camila, hojeMenos(115), hojeMenos(112)), admin);
+                instalado, TipoProjeto.PADRAO, camila, hojeMenos(115), hojeMenos(112), new java.math.BigDecimal("10.80")), admin);
         projetoService.encaminhar(projetoInstalado.getId(), hojeMenos(112), hojeMenos(110),
                 camila);
         projetoService.aprovar(projetoInstalado.getId(), hojeMenos(95), camila);
@@ -181,7 +182,7 @@ public class DadosDeExemplo implements ApplicationRunner {
         Long cicloCompleto = criarCliente("Sandra Oliveira (exemplo)", "Camaçari", 150);
         Projeto projetoCompleto = projetoService.criar(new ProjetoCriarRequest(
                 cicloCompleto, TipoProjeto.INVERSORES_SEPARADOS, ivan, hojeMenos(145),
-                hojeMenos(142)), admin);
+                hojeMenos(142), new java.math.BigDecimal("15.40")), admin);
         projetoService.encaminhar(projetoCompleto.getId(), hojeMenos(142), hojeMenos(140), ivan);
         projetoService.aprovar(projetoCompleto.getId(), hojeMenos(120), ivan);
         projetoService.registrarInstalacao(projetoCompleto.getId(), hojeMenos(90));
@@ -193,7 +194,7 @@ public class DadosDeExemplo implements ApplicationRunner {
         // 12. Projeto aguardando envio por motivo operacional (não é débito).
         Long aguardando = criarCliente("Gustavo Pereira (exemplo)", "Salvador", 45);
         Projeto projetoAguardando = projetoService.criar(new ProjetoCriarRequest(
-                aguardando, TipoProjeto.PROJETO_UMA_PLACA_A_MAIS, larissa, hojeMenos(40), null),
+                aguardando, TipoProjeto.PROJETO_UMA_PLACA_A_MAIS, larissa, hojeMenos(40), null, new java.math.BigDecimal("6.60")),
                 admin);
         projetoService.aguardarEnvio(projetoAguardando.getId(), larissa);
 
@@ -239,9 +240,15 @@ public class DadosDeExemplo implements ApplicationRunner {
                 .toList();
     }
 
+    private int sequencialUc = 2;
+
+    /** UC e telefone sintéticos, para as telas mostrarem os campos preenchidos. */
     private Long criarCliente(String nome, String cidade, int diasAtras) {
-        return clienteService.criar(
-                new ClienteRequest(nome, cidade, "Vendedor Bruno", hojeMenos(diasAtras))).id();
+        String uc = "30012345%02d".formatted(sequencialUc);
+        String telefone = "(71) 99100-%04d".formatted(sequencialUc);
+        sequencialUc++;
+        return clienteService.criar(new ClienteRequest(
+                nome, cidade, "Vendedor Bruno", hojeMenos(diasAtras), uc, telefone)).id();
     }
 
     private static LocalDate hojeMenos(int dias) {

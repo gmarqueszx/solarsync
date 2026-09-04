@@ -6,5 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ClienteRepository extends JpaRepository<Cliente, Long> {
 
-    Page<Cliente> findByNomeContainingIgnoreCase(String nome, Pageable paginacao);
+    /** Busca única da tela: o analista digita nome ou número de UC no mesmo campo. */
+    Page<Cliente> findByNomeContainingIgnoreCaseOrUcCoelbaContainingIgnoreCase(
+            String nome, String ucCoelba, Pageable paginacao);
 }

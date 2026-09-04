@@ -2010,6 +2010,16 @@
             "maxLength" : 150,
             "minLength" : 0
           },
+          "telefone" : {
+            "type" : "string",
+            "maxLength" : 20,
+            "minLength" : 0
+          },
+          "ucCoelba" : {
+            "type" : "string",
+            "maxLength" : 30,
+            "minLength" : 0
+          },
           "vendedor" : {
             "type" : "string",
             "maxLength" : 150,
@@ -2035,6 +2045,12 @@
           "nome" : {
             "type" : "string"
           },
+          "telefone" : {
+            "type" : "string"
+          },
+          "ucCoelba" : {
+            "type" : "string"
+          },
           "vendedor" : {
             "type" : "string"
           }
@@ -2051,6 +2067,9 @@
             "format" : "int64"
           },
           "nome" : {
+            "type" : "string"
+          },
+          "ucCoelba" : {
             "type" : "string"
           }
         }
@@ -2643,6 +2662,10 @@
             "type" : "string",
             "format" : "date"
           },
+          "potenciaKwp" : {
+            "type" : "number",
+            "minimum" : 0
+          },
           "tipoProjeto" : {
             "type" : "string",
             "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
@@ -2668,6 +2691,10 @@
           "dataRecebimento" : {
             "type" : "string",
             "format" : "date"
+          },
+          "potenciaKwp" : {
+            "type" : "number",
+            "minimum" : 0
           },
           "tipoProjeto" : {
             "type" : "string",
@@ -2777,6 +2804,9 @@
           "motivoReprova" : {
             "type" : "string"
           },
+          "potenciaKwp" : {
+            "type" : "number"
+          },
           "status" : {
             "type" : "string",
             "enum" : [ "RECEBIDO", "AGUARDANDO_ENVIO", "ENCAMINHADO", "APROVADO", "REPROVADO", "REENCAMINHADO" ]
@@ -2824,6 +2854,9 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "potenciaKwp" : {
+            "type" : "number"
+          },
           "status" : {
             "type" : "string",
             "enum" : [ "RECEBIDO", "AGUARDANDO_ENVIO", "ENCAMINHADO", "APROVADO", "REPROVADO", "REENCAMINHADO" ]
@@ -2841,6 +2874,14 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "clientesComDebitoQuitado" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "pendenciasAbertasNoPeriodo" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
           "pendenciasResolvidas" : {
             "type" : "integer",
             "format" : "int64"
@@ -2853,7 +2894,23 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "projetosReencaminhados" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
           "projetosReprovados" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "unificacoesPendentes" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "vistoriasAprovadas" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "vistoriasReprovadas" : {
             "type" : "integer",
             "format" : "int64"
           },

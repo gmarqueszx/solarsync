@@ -41,11 +41,20 @@ public record DashboardResponse(
     }
 
     public record Quantitativos(
+            long pendenciasAbertasNoPeriodo,
             long pendenciasResolvidas,
             long projetosEncaminhados,
+            long projetosReencaminhados,
             long projetosAprovados,
             long projetosReprovados,
+            /** Situação de agora, não do período: quem está travado neste momento. */
             long clientesComDebitoAtivo,
-            long vistoriasSolicitadas) {
+            /** Também situação de agora, para dar denominador ao número acima. */
+            long clientesComDebitoQuitado,
+            long vistoriasSolicitadas,
+            long vistoriasAprovadas,
+            long vistoriasReprovadas,
+            /** Situação de agora: unificações ainda por fazer. */
+            long unificacoesPendentes) {
     }
 }

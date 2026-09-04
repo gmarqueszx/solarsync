@@ -1,5 +1,6 @@
 package com.conectsol.solarsync.projeto.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.conectsol.solarsync.projeto.Projeto;
@@ -18,7 +19,8 @@ public record ProjetoResumoResponse(
         LocalDate dataRecebimento,
         LocalDate dataEncaminhado,
         LocalDate dataAprovacao,
-        LocalDate dataInstalacao) {
+        LocalDate dataInstalacao,
+        BigDecimal potenciaKwp) {
 
     public static ProjetoResumoResponse de(Projeto projeto) {
         return new ProjetoResumoResponse(
@@ -34,6 +36,7 @@ public record ProjetoResumoResponse(
                 projeto.getDataRecebimento(),
                 projeto.getDataEncaminhado(),
                 projeto.getDataAprovacao(),
-                projeto.getDataInstalacao());
+                projeto.getDataInstalacao(),
+                projeto.getPotenciaKwp());
     }
 }

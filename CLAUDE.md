@@ -52,7 +52,10 @@ que o dashboard do gestor precisa resolver.
 
 Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
 
-- **Cliente** — nome, cidade, vendedor, data_pagamento
+- **Cliente** — nome, cidade, vendedor, data_pagamento, **uc_coelba**, **telefone**. A UC é
+  como a Coelba identifica o cliente, então é chave de busca (`GET /api/clientes?nome=` casa
+  nome **ou** UC). Sem UNIQUE: um cliente pode ter mais de uma UC — é disso que trata a
+  unificação; aqui fica a principal
 - **Pendencia** — cliente_id, tipo, status, solicitado_em, resolvido_em, responsavel_id, observação
 - **Debito** — cliente_id, status (ativo/quitado), última_consulta_em. Um registro por cliente
   (constraint no banco): é o retrato da última consulta na agência virtual, não um lançamento
@@ -63,6 +66,7 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
   `REENCAMINHADO`), motivo_reprova, data_aprovacao
   - `RECEBIDO`: analista recebeu o projeto (status inicial, criado automaticamente quando a
     pendência do cliente é resolvida) — `data_encaminhado` ainda nula
+  - **potencia_kwp**: porte da usina, para o gestor somar kWp homologado por período
   - `AGUARDANDO_ENVIO`: projeto já preenchido, mas ainda não enviado à Coelba por algum motivo
     operacional. **Não é o estado do cliente com débito**: débito não pausa o projeto, ele
     bloqueia o envio (ver "Débito" abaixo)

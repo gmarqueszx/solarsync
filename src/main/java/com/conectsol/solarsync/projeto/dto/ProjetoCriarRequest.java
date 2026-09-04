@@ -1,10 +1,12 @@
 package com.conectsol.solarsync.projeto.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.conectsol.solarsync.projeto.TipoProjeto;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
 
 /**
  * Criação manual, para o caso em que o projeto não veio da resolução de uma pendência. Nasce
@@ -15,5 +17,6 @@ public record ProjetoCriarRequest(
         @NotNull TipoProjeto tipoProjeto,
         Long analistaResponsavelId,
         LocalDate dataRecebimento,
-        LocalDate dataArt) {
+        LocalDate dataArt,
+        @PositiveOrZero BigDecimal potenciaKwp) {
 }

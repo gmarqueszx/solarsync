@@ -1,5 +1,6 @@
 package com.conectsol.solarsync.projeto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import com.conectsol.solarsync.auth.Usuario;
@@ -70,4 +71,8 @@ public class Projeto extends BaseEntity {
      */
     @Column(name = "data_instalacao")
     private LocalDate dataInstalacao;
+
+    /** Porte da usina. Permite ao gestor somar kWp homologado por período. */
+    @Column(name = "potencia_kwp", precision = 8, scale = 2)
+    private BigDecimal potenciaKwp;
 }

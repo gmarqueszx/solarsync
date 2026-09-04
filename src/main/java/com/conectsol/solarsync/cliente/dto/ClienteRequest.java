@@ -13,5 +13,7 @@ public record ClienteRequest(
         @NotBlank @Size(max = 150) String nome,
         @Size(max = 100) String cidade,
         @Size(max = 150) String vendedor,
-        LocalDate dataPagamento) {
+        LocalDate dataPagamento,
+        @Size(max = 30) String ucCoelba,
+        @Size(max = 20) String telefone) {
 }

@@ -18,10 +18,13 @@ public class ClienteService {
     private final ClienteRepository clienteRepository;
 
     @Transactional(readOnly = true)
-    public Page<Cliente> listar(String nome, Pageable paginacao) {
-        return nome == null || nome.isBlank()
-                ? clienteRepository.findAll(paginacao)
-                : clienteRepository.findByNomeContainingIgnoreCase(nome.trim(), paginacao);
+    public Page<Cliente> listar(String busca, Pageable paginacao) {
+        if (busca == null || busca.isBlank()) {
+            return clienteRepository.findAll(paginacao);
+        }
+        String termo = busca.trim();
+        return clienteRepository.findByNomeContainingIgnoreCaseOrUcCoelbaContainingIgnoreCase(
+                termo, termo, paginacao);
     }
 
     @Transactional(readOnly = true)
@@ -36,6 +39,8 @@ public class ClienteService {
                 .cidade(requisicao.cidade())
                 .vendedor(requisicao.vendedor())
                 .dataPagamento(requisicao.dataPagamento())
+                .ucCoelba(requisicao.ucCoelba())
+                .telefone(requisicao.telefone())
                 .build();
         return ClienteResponse.de(clienteRepository.save(cliente));
     }
@@ -47,6 +52,8 @@ public class ClienteService {
         cliente.setCidade(requisicao.cidade());
         cliente.setVendedor(requisicao.vendedor());
         cliente.setDataPagamento(requisicao.dataPagamento());
+        cliente.setUcCoelba(requisicao.ucCoelba());
+        cliente.setTelefone(requisicao.telefone());
         return ClienteResponse.de(clienteRepository.save(cliente));
     }
 

@@ -72,7 +72,7 @@ public class ProjetoService {
                 .findFirst()
                 .orElseGet(() -> nascerRecebido(
                         carregarCliente(clienteId), TipoProjeto.PADRAO, null,
-                        LocalDate.now(), null, usuarioId));
+                        LocalDate.now(), null, null, usuarioId));
     }
 
     @Transactional
@@ -83,6 +83,7 @@ public class ProjetoService {
                 resolverAnalista(requisicao.analistaResponsavelId()),
                 requisicao.dataRecebimento() == null ? LocalDate.now() : requisicao.dataRecebimento(),
                 requisicao.dataArt(),
+                requisicao.potenciaKwp(),
                 usuarioId);
     }
 
@@ -93,6 +94,7 @@ public class ProjetoService {
         projeto.setAnalistaResponsavel(resolverAnalista(requisicao.analistaResponsavelId()));
         projeto.setDataRecebimento(requisicao.dataRecebimento());
         projeto.setDataArt(requisicao.dataArt());
+        projeto.setPotenciaKwp(requisicao.potenciaKwp());
         return projetoRepository.save(projeto);
     }
 
@@ -193,7 +195,8 @@ public class ProjetoService {
     }
 
     private Projeto nascerRecebido(Cliente cliente, TipoProjeto tipo, Usuario analista,
-            LocalDate dataRecebimento, LocalDate dataArt, Long usuarioId) {
+            LocalDate dataRecebimento, LocalDate dataArt, java.math.BigDecimal potenciaKwp,
+            Long usuarioId) {
 
         Projeto projeto = Projeto.builder()
                 .cliente(cliente)
@@ -202,6 +205,7 @@ public class ProjetoService {
                 .status(StatusProjeto.RECEBIDO)
                 .dataRecebimento(dataRecebimento)
                 .dataArt(dataArt)
+                .potenciaKwp(potenciaKwp)
                 .build();
         Projeto salvo = projetoRepository.save(projeto);
 

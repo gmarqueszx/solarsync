@@ -162,9 +162,52 @@ class DashboardRepository {
      * recorte de datas aqui responderia outra pergunta, e menos útil.
      */
     long clientesComDebitoAtivo() {
-        Query consulta = entityManager.createNativeQuery(
-                "SELECT COUNT(*) FROM debito WHERE status = 'ATIVO'");
+        return semPeriodo("SELECT COUNT(*) FROM debito WHERE status = 'ATIVO'");
+    }
+
+    private long semPeriodo(String sql) {
+        Query consulta = entityManager.createNativeQuery(sql);
         return ((Number) consulta.getSingleResult()).longValue();
+    }
+
+    long pendenciasAbertasNoPeriodo(LocalDate de, LocalDate ate) {
+        return contar("""
+                SELECT COUNT(*) FROM pendencia WHERE 1 = 1
+                """ + noPeriodo("solicitado_em"), de, ate);
+    }
+
+    /** Como reprovados: sai do histórico, porque não há coluna de data de reencaminhamento. */
+    long projetosReencaminhados(LocalDate de, LocalDate ate) {
+        return contar("""
+                SELECT COUNT(DISTINCT entidade_id) FROM historico_status
+                WHERE entidade_tipo = 'PROJETO' AND status_novo = 'REENCAMINHADO'
+                """ + noPeriodo("ocorrido_em"), de, ate);
+    }
+
+    long clientesComDebitoQuitado() {
+        return semPeriodo("SELECT COUNT(*) FROM debito WHERE status = 'QUITADO'");
+    }
+
+    long unificacoesPendentes() {
+        return semPeriodo("SELECT COUNT(*) FROM unificacao WHERE feita = FALSE");
+    }
+
+    long vistoriasAprovadas(LocalDate de, LocalDate ate) {
+        return contar("""
+                SELECT COUNT(*) FROM vistoria
+                WHERE status = 'APROVADA' AND data_resultado IS NOT NULL
+                """ + noPeriodo("data_resultado"), de, ate);
+    }
+
+    /**
+     * Do histórico, e não do status atual: uma vistoria reprovada e depois aprovada continua
+     * tendo sido reprovada no período — é o retrabalho que o gestor quer enxergar.
+     */
+    long vistoriasReprovadas(LocalDate de, LocalDate ate) {
+        return contar("""
+                SELECT COUNT(DISTINCT entidade_id) FROM historico_status
+                WHERE entidade_tipo = 'VISTORIA' AND status_novo = 'REPROVADA'
+                """ + noPeriodo("ocorrido_em"), de, ate);
     }
 
     long vistoriasSolicitadas(LocalDate de, LocalDate ate) {

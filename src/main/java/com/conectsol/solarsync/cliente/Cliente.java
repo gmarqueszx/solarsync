@@ -35,4 +35,14 @@ public class Cliente extends BaseEntity {
 
     @Column(name = "data_pagamento")
     private LocalDate dataPagamento;
+
+    /**
+     * Unidade Consumidora da Coelba. Não é única: um cliente pode ter mais de uma UC — é disso
+     * que trata a etapa de unificação. Aqui fica a principal.
+     */
+    @Column(name = "uc_coelba", length = 30)
+    private String ucCoelba;
+
+    @Column(name = "telefone", length = 20)
+    private String telefone;
 }

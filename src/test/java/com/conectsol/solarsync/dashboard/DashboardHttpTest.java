@@ -213,7 +213,14 @@ class DashboardHttpTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.quantitativos.projetosAprovados").value(1))
                 .andExpect(jsonPath("$.quantitativos.projetosReprovados").value(1))
                 .andExpect(jsonPath("$.quantitativos.vistoriasSolicitadas").value(1))
-                .andExpect(jsonPath("$.quantitativos.clientesComDebitoAtivo").value(1));
+                .andExpect(jsonPath("$.quantitativos.clientesComDebitoAtivo").value(1))
+                // Contadores que o protótipo do frontend já mostrava e a API passou a devolver.
+                .andExpect(jsonPath("$.quantitativos.vistoriasAprovadas").value(1))
+                .andExpect(jsonPath("$.quantitativos.vistoriasReprovadas").value(0))
+                .andExpect(jsonPath("$.quantitativos.projetosReencaminhados").value(0))
+                .andExpect(jsonPath("$.quantitativos.clientesComDebitoQuitado").value(0))
+                .andExpect(jsonPath("$.quantitativos.unificacoesPendentes").value(0))
+                .andExpect(jsonPath("$.quantitativos.pendenciasAbertasNoPeriodo").value(0));
     }
 
     @Test

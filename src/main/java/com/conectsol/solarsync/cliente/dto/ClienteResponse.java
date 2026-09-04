@@ -9,7 +9,9 @@ public record ClienteResponse(
         String nome,
         String cidade,
         String vendedor,
-        LocalDate dataPagamento) {
+        LocalDate dataPagamento,
+        String ucCoelba,
+        String telefone) {
 
     public static ClienteResponse de(Cliente cliente) {
         return new ClienteResponse(
@@ -17,6 +19,8 @@ public record ClienteResponse(
                 cliente.getNome(),
                 cliente.getCidade(),
                 cliente.getVendedor(),
-                cliente.getDataPagamento());
+                cliente.getDataPagamento(),
+                cliente.getUcCoelba(),
+                cliente.getTelefone());
     }
 }
