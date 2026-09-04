@@ -290,8 +290,13 @@ Cada item abaixo quebrou o build ou a aplicação neste projeto — não confie 
 - `Specification.where(...)` saiu de cena → `Specification.allOf(...)` / `unrestricted()`.
 - `@Builder` do Lombok **não** cobre campos herdados (o `id` do `BaseEntity`): em teste, use
   `entidade.setId(...)` depois do `build()`.
-- **Frontend**: estilo Navan em paleta verde (ver seção 7) — repo separado `solarsync-web`,
-  consome a API via REST/JSON
+- **Frontend**: repositório separado — pasta local `solarsync-front`, remoto
+  `github.com/gmarqueszx/solarsync-web.git` (o nome do remoto ficou diferente da pasta).
+  React + TypeScript + Vite + Tailwind, estilo Navan em paleta verde (ver seção 7), consumindo
+  esta API. **Ele tem o próprio `CLAUDE.md`**, que é a fonte de verdade das decisões de
+  frontend — não duplique regra de negócio lá, porque as duas cópias divergem (foi o que
+  aconteceu: o arquivo de lá era uma cópia deste, anterior a todas as decisões de autenticação,
+  débito e status de projeto)
 - **Infra local**: Docker Compose (API + Postgres), alinhado ao ambiente já usado no VPS Contabo
 - **Estrutura de pacotes** (implementada):
   ```
@@ -488,7 +493,43 @@ segredo JWT fixo (token sobrevive a restart), senha de admin e dados de exemplo.
 recomendado: evita depender de sintaxe de variável de ambiente, que difere entre PowerShell e
 Bash. Cuidado com o efeito colateral desse arquivo nos testes, descrito na seção 6.
 
-## 11. Próximos passos
+## 11. Buracos conhecidos
+
+Coisas que funcionam como projetado, mas cujo efeito colateral vale ter em vista:
+
+- **Projeto criado pela automação nasce sem analista.** `criarOuAtivarProjetoParaCliente` não
+  tem como saber a quem atribuir, então o projeto aparece sem responsável — e pode ficar sem
+  dono sem ninguém perceber, que é o tipo de furo que este sistema deveria eliminar. Não existe
+  filtro "sem analista" na API; seriam poucas linhas em `ProjetoSpecs` e viraria fila de
+  trabalho. O dashboard já mostra uma faixa "Sem analista atribuído" na carga por analista.
+- **Apagar um registro deixa histórico órfão.** `historico_status` referencia
+  `entidade_tipo` + `entidade_id` sem FK (só `usuario_id` tem FK), então excluir uma pendência
+  ou projeto deixa as linhas de auditoria apontando para um id que não existe mais. É coerente
+  com preservar auditoria, mas essas linhas entram nas contagens do dashboard que saem do
+  histórico (reprovados, reencaminhados, vistorias reprovadas). Mais um motivo para o caminho
+  normal ser cancelar por status, não excluir.
+- **`historico_status.usuario_id` tem FK para `usuario`**: apagar um usuário que já aparece no
+  histórico falha com 409. Desative em vez de apagar. Em teste, isso significa limpar
+  `historico_status` antes dos usuários no `@AfterEach` — todo módulo que publica evento cai
+  nisso.
+- **Sem rate limit no login** (item 11 do checklist): BCrypt é caro de propósito, e endpoint
+  público sem limite é vetor de negação de serviço. Bloqueante para ir ao ar.
+- **Mensagem de erro de login não distingue API fora do ar de senha errada.** O `fetch` lança
+  `TypeError` quando não alcança o servidor, e o `AuthContext` do frontend trata no `catch`
+  genérico — a tela diz "credenciais inválidas" quando o backend está desligado. Confunde, e é
+  simples de separar.
+
+## 12. Decisões em aberto com o usuário
+
+Levantadas e ainda sem resposta ao fim da sessão de 03–04/09/2026:
+
+- **Data da ART**: hoje é pedida no modal de "Encaminhar à Coelba", não no cadastro do projeto,
+  porque é lá que ela é usada. Se a ART já for conhecida no momento do cadastro, o campo volta
+  para o formulário de criação (a API aceita `dataArt` na criação).
+- **Formatação de datas no frontend**: todas as telas mostram ISO (`2026-08-20`), herdado do
+  protótipo. Vale uma passada aplicando `DD/MM/AAAA` em todos os módulos de uma vez.
+
+## 13. Próximos passos
 
 1. ~~Modelo de dados + eventos de domínio~~ — **feito** (fase 1)
 2. ~~Contratos REST/OpenAPI + controllers de Pendências e Projetos, com JWT e RBAC~~ —
@@ -499,9 +540,12 @@ Bash. Cuidado com o efeito colateral desse arquivo nos testes, descrito na seç�
    manual), vistoria só depois da instalação, e as duas filas de unificação por filtro
 5. ~~Dashboard (seção 5)~~ — **feito**: `GET /api/dashboard?de=&ate=`, as 13 métricas numa
    resposta só, restrito a GESTOR/ADMIN
-6. **Próximo**: Frontend `solarsync-web` consumindo o contrato de `docs/api/openapi.json`
-7. Script de importação da planilha (usar `POST /api/projetos/{id}/corrigir-status` para os
-   registros que chegam fora de ordem)
+6. ~~Frontend ligado na API~~ — **feito**: as seis telas consumindo o contrato, com login,
+   renovação automática de token e RBAC. Ver o `CLAUDE.md` do `solarsync-front`
+7. **Próximo**: script de importação da planilha `PLANILHA_TESTE_-_PROJETOS_.xlsx` (usar
+   `POST /api/projetos/{id}/corrigir-status` para os registros que chegam fora de ordem, e a
+   data de consulta/solicitação nos módulos que aceitam data retroativa, para as métricas não
+   nascerem zeradas)
 8. Antes de ir ao ar: rate limit no `/api/auth/login` (item 11 do checklist — sem ele o BCrypt
    é vetor de DoS), HTTPS/TLS (item 12) e a auditoria de segurança (item 10)
 9. Integrações da seção 9 (Nectar, Gmail)
