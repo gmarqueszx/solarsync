@@ -1,9 +1,11 @@
 package com.conectsol.solarsync.unificacao.dto;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 import com.conectsol.solarsync.auth.dto.UsuarioResumoResponse;
 import com.conectsol.solarsync.cliente.dto.ClienteResumoResponse;
+import com.conectsol.solarsync.unificacao.StatusDesligamento;
 import com.conectsol.solarsync.unificacao.Unificacao;
 
 public record UnificacaoResponse(
@@ -13,7 +15,9 @@ public record UnificacaoResponse(
         UsuarioResumoResponse projetista,
         String informacoes,
         boolean feita,
-        boolean desligamento,
+        StatusDesligamento desligamentoStatus,
+        LocalDate desligamentoSolicitadoEm,
+        LocalDate desligamentoConcluidoEm,
         Instant criadoEm,
         Instant atualizadoEm) {
 
@@ -25,7 +29,9 @@ public record UnificacaoResponse(
                 UsuarioResumoResponse.de(unificacao.getProjetista()),
                 unificacao.getInformacoes(),
                 unificacao.isFeita(),
-                unificacao.isDesligamento(),
+                unificacao.getDesligamentoStatus(),
+                unificacao.getDesligamentoSolicitadoEm(),
+                unificacao.getDesligamentoConcluidoEm(),
                 unificacao.getCriadoEm(),
                 unificacao.getAtualizadoEm());
     }

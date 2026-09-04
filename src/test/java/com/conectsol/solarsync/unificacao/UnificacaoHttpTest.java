@@ -25,6 +25,7 @@ import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.auth.UsuarioRepository;
 import com.conectsol.solarsync.cliente.ClienteRepository;
 import com.conectsol.solarsync.common.AbstractIntegrationTest;
+import com.conectsol.solarsync.historico.HistoricoStatusRepository;
 import com.jayway.jsonpath.JsonPath;
 
 @AutoConfigureMockMvc
@@ -50,6 +51,9 @@ class UnificacaoHttpTest extends AbstractIntegrationTest {
 
     @Autowired
     private UnificacaoRepository unificacaoRepository;
+
+    @Autowired
+    private HistoricoStatusRepository historicoStatusRepository;
 
     private Long usuarioCriadoId;
     private String token;
@@ -81,8 +85,13 @@ class UnificacaoHttpTest extends AbstractIntegrationTest {
         clienteId = JsonPath.read(cliente, "$.id");
     }
 
+    /**
+     * O histórico precisa sair primeiro: desde que o desligamento passou a publicar evento, há
+     * linhas de historico_status apontando para o usuário do teste, e a FK impede apagá-lo.
+     */
     @AfterEach
     void limpar() {
+        historicoStatusRepository.deleteAll();
         unificacaoRepository.deleteAll();
         if (usuarioCriadoId != null) {
             usuarioRepository.deleteById(usuarioCriadoId);
@@ -100,7 +109,7 @@ class UnificacaoHttpTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void dosDoisMarcosIndependentesAsFilasDeTrabalho() throws Exception {
+    void doPedidoDeDesligamentoAteOMedidorDesligado() throws Exception {
         String criada = autenticada(post("/api/unificacoes"), """
                 {"clienteId": %d, "informacoes": "Unificar duas UCs do mesmo terreno",
                  "projetistaId": %d}""".formatted(clienteId, usuarioCriadoId))
@@ -108,12 +117,18 @@ class UnificacaoHttpTest extends AbstractIntegrationTest {
                 // Sem cidade no corpo, herda a do cliente.
                 .andExpect(jsonPath("$.cidade").value("Feira de Santana"))
                 .andExpect(jsonPath("$.feita").value(false))
-                .andExpect(jsonPath("$.desligamento").value(false))
+                .andExpect(jsonPath("$.desligamentoStatus").value("NAO_SOLICITADO"))
                 .andExpect(jsonPath("$.projetista.nome").value("Analista da Unificação"))
                 .andReturn().getResponse().getContentAsString();
         Integer id = JsonPath.read(criada, "$.id");
 
-        // Fila de trabalho: o que ainda não foi feito.
+        // A ordem importa: pedir desligamento antes de confirmar a unificação desligaria um
+        // medidor de que o cliente ainda depende.
+        autenticada(post("/api/unificacoes/%d/solicitar-desligamento".formatted(id)), "{}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("UNIFICACAO_NAO_FEITA"));
+
+        // Fila 1: o que falta unificar.
         mvc.perform(get("/api/unificacoes")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .param("feita", "false"))
@@ -123,26 +138,75 @@ class UnificacaoHttpTest extends AbstractIntegrationTest {
         autenticada(post("/api/unificacoes/%d/concluir".formatted(id)), "{}")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.feita").value(true))
-                // Os marcos são independentes: concluir não desliga o medidor.
-                .andExpect(jsonPath("$.desligamento").value(false));
+                // Concluir a unificação não pede o desligamento sozinho.
+                .andExpect(jsonPath("$.desligamentoStatus").value("NAO_SOLICITADO"));
 
-        // Segunda fila: unificado, mas com medidor antigo ainda ligado.
+        // Fila 2: unificado e ainda falta pedir o desligamento.
         mvc.perform(get("/api/unificacoes")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                .param("feita", "true").param("desligamento", "false"))
+                .param("feita", "true").param("desligamentoStatus", "NAO_SOLICITADO"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElementos").value(1));
 
-        autenticada(post("/api/unificacoes/%d/registrar-desligamento".formatted(id)), "{}")
+        autenticada(post("/api/unificacoes/%d/solicitar-desligamento".formatted(id)), """
+                {"data": "2026-08-20"}""")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.desligamento").value(true));
+                .andExpect(jsonPath("$.desligamentoStatus").value("SOLICITADO"))
+                .andExpect(jsonPath("$.desligamentoSolicitadoEm").value("2026-08-20"));
 
-        // Nada mais pendente em nenhuma das duas filas.
+        // Fila 3: aguardando retorno da equipe de campo — a que mais se perde de vista.
         mvc.perform(get("/api/unificacoes")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                .param("feita", "true").param("desligamento", "false"))
+                .param("desligamentoStatus", "SOLICITADO"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElementos").value(1));
+
+        autenticada(post("/api/unificacoes/%d/concluir-desligamento".formatted(id)), """
+                {"data": "2026-08-30"}""")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.desligamentoStatus").value("CONCLUIDO"))
+                .andExpect(jsonPath("$.desligamentoConcluidoEm").value("2026-08-30"));
+
+        // Nada mais pendente em nenhuma fila.
+        mvc.perform(get("/api/unificacoes")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .param("desligamentoStatus", "NAO_SOLICITADO,SOLICITADO"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElementos").value(0));
+
+        // O ciclo inteiro auditado, que é de onde sai o tempo de espera.
+        mvc.perform(get("/api/unificacoes/%d".formatted(id))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.desligamentoStatus").value("CONCLUIDO"));
+    }
+
+    @Test
+    void quandoAEquipeNaoRealizaODesligamentoAbreSeOs() throws Exception {
+        String criada = autenticada(post("/api/unificacoes"), """
+                {"clienteId": %d}""".formatted(clienteId))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Integer id = JsonPath.read(criada, "$.id");
+
+        autenticada(post("/api/unificacoes/%d/concluir".formatted(id)), "{}")
+                .andExpect(status().isOk());
+        autenticada(post("/api/unificacoes/%d/solicitar-desligamento".formatted(id)), "{}")
+                .andExpect(status().isOk());
+
+        autenticada(post("/api/unificacoes/%d/abrir-os".formatted(id)), "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.desligamentoStatus").value("OS_ABERTA"));
+
+        // Da O.S. ainda se chega ao desligamento concluído.
+        autenticada(post("/api/unificacoes/%d/concluir-desligamento".formatted(id)), "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.desligamentoStatus").value("CONCLUIDO"));
+
+        // E depois de concluído não há volta.
+        autenticada(post("/api/unificacoes/%d/abrir-os".formatted(id)), "{}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("TRANSICAO_INVALIDA"));
     }
 
     @Test

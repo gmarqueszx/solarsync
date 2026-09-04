@@ -34,9 +34,9 @@ final class UnificacaoSpecs {
         if (filtro.feita() != null) {
             filtros.add((raiz, consulta, cb) -> cb.equal(raiz.get("feita"), filtro.feita()));
         }
-        if (filtro.desligamento() != null) {
+        if (filtro.desligamentoStatus() != null && !filtro.desligamentoStatus().isEmpty()) {
             filtros.add((raiz, consulta, cb) ->
-                    cb.equal(raiz.get("desligamento"), filtro.desligamento()));
+                    raiz.get("desligamentoStatus").in(filtro.desligamentoStatus()));
         }
         if (filtro.q() != null && !filtro.q().isBlank()) {
             String padrao = "%" + filtro.q().trim().toLowerCase() + "%";

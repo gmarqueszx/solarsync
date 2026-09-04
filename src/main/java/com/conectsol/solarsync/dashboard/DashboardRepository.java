@@ -192,6 +192,34 @@ class DashboardRepository {
         return semPeriodo("SELECT COUNT(*) FROM unificacao WHERE feita = FALSE");
     }
 
+    /** A fila que mais se perde de vista: pedido feito, ninguém voltou a olhar. */
+    long desligamentosAguardando() {
+        return semPeriodo(
+                "SELECT COUNT(*) FROM unificacao WHERE desligamento_status = 'SOLICITADO'");
+    }
+
+    long desligamentosComOsAberta() {
+        return semPeriodo(
+                "SELECT COUNT(*) FROM unificacao WHERE desligamento_status = 'OS_ABERTA'");
+    }
+
+    long desligamentosConcluidos(LocalDate de, LocalDate ate) {
+        return contar("""
+                SELECT COUNT(*) FROM unificacao
+                WHERE desligamento_status = 'CONCLUIDO' AND desligamento_concluido_em IS NOT NULL
+                """ + noPeriodo("desligamento_concluido_em"), de, ate);
+    }
+
+    /** Da solicitação até o medidor efetivamente desligado. */
+    Double mediaDiasEsperaDoDesligamento(LocalDate de, LocalDate ate) {
+        return media("""
+                SELECT AVG(desligamento_concluido_em - desligamento_solicitado_em)
+                FROM unificacao
+                WHERE desligamento_concluido_em IS NOT NULL
+                  AND desligamento_solicitado_em IS NOT NULL
+                """ + noPeriodo("desligamento_concluido_em"), de, ate);
+    }
+
     long vistoriasAprovadas(LocalDate de, LocalDate ate) {
         return contar("""
                 SELECT COUNT(*) FROM vistoria

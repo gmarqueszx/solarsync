@@ -212,7 +212,23 @@ public class DadosDeExemplo implements ApplicationRunner {
         var unificacaoConcluida = unificacaoService.criar(new UnificacaoRequest(desligado, null,
                 larissa, "Unificação com desligamento do medidor antigo"));
         unificacaoService.marcarFeita(unificacaoConcluida.getId(), true);
-        unificacaoService.marcarDesligamento(unificacaoConcluida.getId(), true);
+        unificacaoService.solicitarDesligamento(unificacaoConcluida.getId(), hojeMenos(20), admin);
+        unificacaoService.concluirDesligamento(unificacaoConcluida.getId(), hojeMenos(6), admin);
+
+        // 14. Desligamento pedido e ainda sem retorno — a fila que se perde de vista.
+        Long aguardandoDesligamento = criarCliente("Sítio Boa Vista (exemplo)", "Camaçari", 140);
+        var unificacaoAguardando = unificacaoService.criar(new UnificacaoRequest(
+                aguardandoDesligamento, null, camila, "Aguardando desligamento do medidor antigo"));
+        unificacaoService.marcarFeita(unificacaoAguardando.getId(), true);
+        unificacaoService.solicitarDesligamento(unificacaoAguardando.getId(), hojeMenos(12), admin);
+
+        // 15. Equipe de campo não realizou o desligamento; abriu-se O.S.
+        Long comOs = criarCliente("Pousada do Vale (exemplo)", "Lauro de Freitas", 170);
+        var unificacaoComOs = unificacaoService.criar(new UnificacaoRequest(
+                comOs, null, ivan, "Equipe não conseguiu acesso ao padrão; O.S. aberta"));
+        unificacaoService.marcarFeita(unificacaoComOs.getId(), true);
+        unificacaoService.solicitarDesligamento(unificacaoComOs.getId(), hojeMenos(45), admin);
+        unificacaoService.abrirOrdemDeServico(unificacaoComOs.getId(), admin);
 
         log.warn("Dados de exemplo semeados: {} clientes, {} projetos. "
                 + "Desabilite SOLARSYNC_DADOS_DE_EXEMPLO antes de usar este banco pra valer.",

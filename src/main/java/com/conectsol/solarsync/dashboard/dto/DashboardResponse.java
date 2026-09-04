@@ -36,6 +36,8 @@ public record DashboardResponse(
             Double paradoPorDebito,
             /** Da instalação da usina até a solicitação da vistoria. */
             Double instalacaoAteSolicitarVistoria,
+            /** Da solicitação do desligamento do medidor unificado até ele ser desligado. */
+            Double esperaDoDesligamento,
             /** Do recebimento do projeto até a vistoria aprovada: o ciclo inteiro do cliente. */
             Double cicloCompleto) {
     }
@@ -55,6 +57,11 @@ public record DashboardResponse(
             long vistoriasAprovadas,
             long vistoriasReprovadas,
             /** Situação de agora: unificações ainda por fazer. */
-            long unificacoesPendentes) {
+            long unificacoesPendentes,
+            /** Situação de agora: desligamento pedido e ainda sem retorno da equipe de campo. */
+            long desligamentosAguardando,
+            /** Situação de agora: casos que precisaram de ordem de serviço. */
+            long desligamentosComOsAberta,
+            long desligamentosConcluidos) {
     }
 }

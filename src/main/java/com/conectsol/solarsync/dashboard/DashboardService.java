@@ -30,6 +30,7 @@ public class DashboardService {
                         arredondar(dashboardRepository.mediaDiasParadoPorDebito(de, ate)),
                         arredondar(dashboardRepository
                                 .mediaDiasInstalacaoAteSolicitarVistoria(de, ate)),
+                        arredondar(dashboardRepository.mediaDiasEsperaDoDesligamento(de, ate)),
                         arredondar(dashboardRepository.mediaDiasCicloCompleto(de, ate))),
                 new Quantitativos(
                         dashboardRepository.pendenciasAbertasNoPeriodo(de, ate),
@@ -43,7 +44,10 @@ public class DashboardService {
                         dashboardRepository.vistoriasSolicitadas(de, ate),
                         dashboardRepository.vistoriasAprovadas(de, ate),
                         dashboardRepository.vistoriasReprovadas(de, ate),
-                        dashboardRepository.unificacoesPendentes()));
+                        dashboardRepository.unificacoesPendentes(),
+                        dashboardRepository.desligamentosAguardando(),
+                        dashboardRepository.desligamentosComOsAberta(),
+                        dashboardRepository.desligamentosConcluidos(de, ate)));
     }
 
     /** Uma casa decimal: "12,4 dias" informa; "12,428571428" só polui a tela. */

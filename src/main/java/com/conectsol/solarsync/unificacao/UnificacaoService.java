@@ -1,5 +1,9 @@
 package com.conectsol.solarsync.unificacao;
 
+import java.time.Instant;
+import java.time.LocalDate;
+
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -9,8 +13,11 @@ import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.auth.UsuarioRepository;
 import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
+import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
+import com.conectsol.solarsync.common.exception.UnificacaoNaoFeitaException;
 import com.conectsol.solarsync.unificacao.dto.UnificacaoFiltro;
 import com.conectsol.solarsync.unificacao.dto.UnificacaoRequest;
+import com.conectsol.solarsync.unificacao.event.UnificacaoStatusChangedEvent;
 
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -18,11 +25,11 @@ import lombok.RequiredArgsConstructor;
 /**
  * Etapa 4 do fluxo: unificação de unidades consumidoras e desligamento do medidor antigo.
  * <p>
- * Ao contrário dos outros módulos, não publica evento de status e não tem máquina de estados:
- * a entidade não tem um campo de status, e sim dois marcos independentes ({@code feita} e
- * {@code desligamento}) que podem acontecer em qualquer ordem. Inventar um status aqui só para
- * uniformizar criaria uma modelagem que o processo real não tem — e o dashboard (seção 5) não
- * pede nenhuma métrica de tempo de unificação.
+ * {@code feita} continua sendo um marco simples — unificou ou não. Já o desligamento do medidor
+ * tem ciclo próprio ({@link StatusDesligamento}): solicita-se e aguarda-se o retorno, com O.S.
+ * como desvio quando a equipe de campo não realiza. Por isso ele tem máquina de estados e
+ * publica evento, ao contrário do que este módulo fazia antes — a modelagem mudou quando o
+ * processo real ficou claro, e um booleano não representava "solicitado, aguardando".
  */
 @Service
 @RequiredArgsConstructor
@@ -31,6 +38,7 @@ public class UnificacaoService {
     private final UnificacaoRepository unificacaoRepository;
     private final ClienteRepository clienteRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public Page<Unificacao> listar(UnificacaoFiltro filtro, Pageable paginacao) {
@@ -54,7 +62,7 @@ public class UnificacaoService {
                 .projetista(resolverProjetista(requisicao.projetistaId()))
                 .informacoes(requisicao.informacoes())
                 .feita(false)
-                .desligamento(false)
+                .desligamentoStatus(StatusDesligamento.NAO_SOLICITADO)
                 .build());
     }
 
@@ -74,11 +82,56 @@ public class UnificacaoService {
         return unificacaoRepository.save(unificacao);
     }
 
+    /**
+     * Pede o desligamento do medidor unificado e passa a aguardar retorno. Exige a unificação
+     * confirmada: pedir antes desligaria um medidor de que o cliente ainda depende.
+     */
     @Transactional
-    public Unificacao marcarDesligamento(Long id, boolean desligamento) {
+    public Unificacao solicitarDesligamento(Long id, LocalDate dataSolicitacao, Long usuarioId) {
         Unificacao unificacao = carregar(id);
-        unificacao.setDesligamento(desligamento);
-        return unificacaoRepository.save(unificacao);
+        if (!unificacao.isFeita()) {
+            throw new UnificacaoNaoFeitaException(id);
+        }
+        unificacao.setDesligamentoSolicitadoEm(
+                dataSolicitacao == null ? LocalDate.now() : dataSolicitacao);
+        return transicionar(unificacao, StatusDesligamento.SOLICITADO, usuarioId);
+    }
+
+    /** A equipe de campo não realizou o desligamento; abriu-se ordem de serviço. */
+    @Transactional
+    public Unificacao abrirOrdemDeServico(Long id, Long usuarioId) {
+        return transicionar(carregar(id), StatusDesligamento.OS_ABERTA, usuarioId);
+    }
+
+    @Transactional
+    public Unificacao concluirDesligamento(Long id, LocalDate dataConclusao, Long usuarioId) {
+        Unificacao unificacao = carregar(id);
+        unificacao.setDesligamentoConcluidoEm(
+                dataConclusao == null ? LocalDate.now() : dataConclusao);
+        return transicionar(unificacao, StatusDesligamento.CONCLUIDO, usuarioId);
+    }
+
+    private Unificacao transicionar(Unificacao unificacao, StatusDesligamento novoStatus,
+            Long usuarioId) {
+
+        StatusDesligamento statusAnterior = unificacao.getDesligamentoStatus();
+
+        // Idempotente, como nos outros módulos: repetir o status não republica evento.
+        if (statusAnterior == novoStatus) {
+            return unificacaoRepository.save(unificacao);
+        }
+        if (!statusAnterior.podeIrPara(novoStatus)) {
+            throw new TransicaoStatusInvalidaException("Desligamento", statusAnterior, novoStatus);
+        }
+
+        unificacao.setDesligamentoStatus(novoStatus);
+        Unificacao salva = unificacaoRepository.save(unificacao);
+
+        eventPublisher.publishEvent(new UnificacaoStatusChangedEvent(
+                salva.getId(), salva.getCliente().getId(), statusAnterior, novoStatus,
+                Instant.now(), usuarioId));
+
+        return salva;
     }
 
     @Transactional

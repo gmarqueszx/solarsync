@@ -25,6 +25,7 @@ import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
 import com.conectsol.solarsync.common.exception.CredenciaisInvalidasException;
 import com.conectsol.solarsync.common.exception.ProjetoSemInstalacaoException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
+import com.conectsol.solarsync.common.exception.UnificacaoNaoFeitaException;
 import com.conectsol.solarsync.common.exception.UsuarioNaoAutorizadoException;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -69,6 +70,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ClienteComDebitoException.class)
     ProblemDetail clienteComDebito(ClienteComDebitoException excecao) {
         return problema(HttpStatus.CONFLICT, "CLIENTE_COM_DEBITO", excecao.getMessage());
+    }
+
+    @ExceptionHandler(UnificacaoNaoFeitaException.class)
+    ProblemDetail unificacaoNaoFeita(UnificacaoNaoFeitaException excecao) {
+        return problema(HttpStatus.CONFLICT, "UNIFICACAO_NAO_FEITA", excecao.getMessage());
     }
 
     @ExceptionHandler(ProjetoSemInstalacaoException.class)

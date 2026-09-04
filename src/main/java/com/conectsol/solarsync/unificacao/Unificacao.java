@@ -1,11 +1,15 @@
 package com.conectsol.solarsync.unificacao;
 
+import java.time.LocalDate;
+
 import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.common.BaseEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -44,7 +48,20 @@ public class Unificacao extends BaseEntity {
     @Column(name = "feita", nullable = false)
     private boolean feita = false;
 
+    /**
+     * Ciclo de solicitar e aguardar retorno — ver {@link StatusDesligamento}. Só faz sentido
+     * depois de {@code feita = true}: confere-se a unificação e, se houve, pede-se o
+     * desligamento do medidor unificado.
+     */
     @Builder.Default
-    @Column(name = "desligamento", nullable = false)
-    private boolean desligamento = false;
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "desligamento_status", nullable = false, length = 20)
+    private StatusDesligamento desligamentoStatus = StatusDesligamento.NAO_SOLICITADO;
+
+    @Column(name = "desligamento_solicitado_em")
+    private LocalDate desligamentoSolicitadoEm;
+
+    @Column(name = "desligamento_concluido_em")
+    private LocalDate desligamentoConcluidoEm;
 }

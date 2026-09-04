@@ -1253,7 +1253,7 @@
     },
     "/api/unificacoes" : {
       "get" : {
-        "description" : "feita=false é a fila de trabalho; feita=true&desligamento=false mostra quem já unificou mas ainda tem medidor para desligar.",
+        "description" : "As filas da etapa 4: feita=false é o que falta unificar; feita=true com desligamentoStatus=NAO_SOLICITADO é quem já unificou e ainda precisa pedir o desligamento; e desligamentoStatus=SOLICITADO mostra o que está aguardando retorno da equipe de campo.",
         "operationId" : "listar_2",
         "parameters" : [ {
           "in" : "query",
@@ -1398,6 +1398,35 @@
         "tags" : [ "Unificações" ]
       }
     },
+    "/api/unificacoes/{id}/abrir-os" : {
+      "post" : {
+        "description" : "Caminho para quando a equipe de campo não realiza o desligamento. Sem isso o caso ficaria na fila de 'aguardando' indefinidamente, sem distinguir quem só espera de quem já precisou de ordem de serviço.",
+        "operationId" : "abrirOrdemDeServico",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnificacaoResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Registra que foi aberta O.S. para o desligamento",
+        "tags" : [ "Unificações" ]
+      }
+    },
     "/api/unificacoes/{id}/concluir" : {
       "post" : {
         "operationId" : "concluir",
@@ -1423,6 +1452,43 @@
           }
         },
         "summary" : "Marca a unificação como feita",
+        "tags" : [ "Unificações" ]
+      }
+    },
+    "/api/unificacoes/{id}/concluir-desligamento" : {
+      "post" : {
+        "operationId" : "concluirDesligamento",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DataDesligamentoRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "409" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UnificacaoResponse"
+                }
+              }
+            },
+            "description" : "Transição inválida a partir do status atual"
+          }
+        },
+        "summary" : "Registra que o medidor unificado foi desligado",
         "tags" : [ "Unificações" ]
       }
     },
@@ -1454,9 +1520,10 @@
         "tags" : [ "Unificações" ]
       }
     },
-    "/api/unificacoes/{id}/registrar-desligamento" : {
+    "/api/unificacoes/{id}/solicitar-desligamento" : {
       "post" : {
-        "operationId" : "registrarDesligamento",
+        "description" : "Exige a unificação confirmada (409 UNIFICACAO_NAO_FEITA caso não esteja): pedir antes desligaria um medidor de que o cliente ainda depende. Depois disso o caso fica aguardando o retorno da equipe de campo — use o filtro desligamentoStatus=SOLICITADO para ver essa fila.",
+        "operationId" : "solicitarDesligamento",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -1466,8 +1533,17 @@
             "format" : "int64"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DataDesligamentoRequest"
+              }
+            }
+          }
+        },
         "responses" : {
-          "200" : {
+          "409" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -1475,10 +1551,10 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "Unificação não concluída, ou transição inválida a partir do status atual"
           }
         },
-        "summary" : "Marca que o medidor antigo foi desligado",
+        "summary" : "Solicita o desligamento do medidor unificado",
         "tags" : [ "Unificações" ]
       }
     },
@@ -2100,6 +2176,15 @@
           },
           "temposMediosEmDias" : {
             "$ref" : "#/components/schemas/TemposMediosEmDias"
+          }
+        }
+      },
+      "DataDesligamentoRequest" : {
+        "type" : "object",
+        "properties" : {
+          "data" : {
+            "type" : "string",
+            "format" : "date"
           }
         }
       },
@@ -2878,6 +2963,18 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "desligamentosAguardando" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "desligamentosComOsAberta" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "desligamentosConcluidos" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
           "pendenciasAbertasNoPeriodo" : {
             "type" : "integer",
             "format" : "int64"
@@ -2974,6 +3071,10 @@
             "type" : "number",
             "format" : "double"
           },
+          "esperaDoDesligamento" : {
+            "type" : "number",
+            "format" : "double"
+          },
           "instalacaoAteSolicitarVistoria" : {
             "type" : "number",
             "format" : "double"
@@ -3029,8 +3130,13 @@
             "type" : "integer",
             "format" : "int64"
           },
-          "desligamento" : {
-            "type" : "boolean"
+          "desligamentoStatus" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "NAO_SOLICITADO", "SOLICITADO", "OS_ABERTA", "CONCLUIDO" ]
+            },
+            "uniqueItems" : true
           },
           "feita" : {
             "type" : "boolean"
@@ -3087,8 +3193,17 @@
             "type" : "string",
             "format" : "date-time"
           },
-          "desligamento" : {
-            "type" : "boolean"
+          "desligamentoConcluidoEm" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "desligamentoSolicitadoEm" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "desligamentoStatus" : {
+            "type" : "string",
+            "enum" : [ "NAO_SOLICITADO", "SOLICITADO", "OS_ABERTA", "CONCLUIDO" ]
           },
           "feita" : {
             "type" : "boolean"

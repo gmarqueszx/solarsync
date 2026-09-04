@@ -28,7 +28,7 @@ class UnificacaoRepositoryTest {
                 .cidade("Feira de Santana")
                 .informacoes("Unificação de duas unidades consumidoras")
                 .feita(false)
-                .desligamento(false)
+                .desligamentoStatus(StatusDesligamento.NAO_SOLICITADO)
                 .build();
 
         Unificacao salva = unificacaoRepository.save(unificacao);
@@ -37,6 +37,8 @@ class UnificacaoRepositoryTest {
 
         Unificacao encontrada = unificacaoRepository.findById(salva.getId()).orElseThrow();
         assertThat(encontrada.isFeita()).isFalse();
+        assertThat(encontrada.getDesligamentoStatus())
+                .isEqualTo(StatusDesligamento.NAO_SOLICITADO);
         assertThat(encontrada.getCliente().getId()).isEqualTo(cliente.getId());
     }
 }

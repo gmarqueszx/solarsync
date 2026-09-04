@@ -80,12 +80,26 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
   e `REPROVADA` → `SOLICITADA` para o reenvio após correção), data_resultado. Reprova e nova
   solicitação ficam no **mesmo registro**, para o histórico mostrar quantas idas e vindas o
   cliente teve em vez de espalhar em vistorias soltas
-- **Unificacao** — cliente_id, cidade, projetista_id, informações, feita (bool), desligamento
-  (bool). Os dois marcos são **independentes e em qualquer ordem**, e a entidade não tem campo
-  de status: por isso este é o único módulo sem máquina de estados nem evento de domínio —
-  inventar um status só para uniformizar criaria modelagem que o processo real não tem, e o
-  dashboard não pede métrica de tempo de unificação. As filas de trabalho saem de filtro:
-  `feita=false`, e `feita=true&desligamento=false` para quem ainda tem medidor a desligar
+- **Unificacao** — cliente_id, cidade, projetista_id, informações, `feita` (bool),
+  `desligamento_status`, `desligamento_solicitado_em`, `desligamento_concluido_em`.
+  <p>
+  `feita` é marco simples: unificou ou não. Já o desligamento do medidor unificado é um
+  **ciclo de solicitar e aguardar retorno** (esclarecido pelo usuário): terminada a instalação,
+  confere-se se a unificação foi feita e, se sim, solicita-se o desligamento do medidor
+  unificado e aguarda-se. Estados: `NAO_SOLICITADO → SOLICITADO → CONCLUIDO`, com
+  `OS_ABERTA` como desvio para quando **a equipe de campo não realiza** o desligamento.
+  <p>
+  ⚠️ Isto **reverteu uma decisão anterior**: a Unificação era documentada aqui como "o único
+  módulo sem máquina de estados nem evento de domínio", porque só tinha dois booleanos
+  independentes. Um booleano não representa "solicitado, aguardando" — que é exatamente o
+  estado onde o caso se perde de vista —, então o desligamento ganhou máquina de estados,
+  evento e auditoria como os outros módulos. As datas permitem medir a espera, que é o número
+  que hoje ninguém tem.
+  <p>
+  Solicitar o desligamento **exige `feita = true`** (409 `UNIFICACAO_NAO_FEITA`): pedir antes
+  desligaria um medidor de que o cliente ainda depende. As filas saem de filtro: `feita=false`
+  (falta unificar), `feita=true&desligamentoStatus=NAO_SOLICITADO` (falta pedir) e
+  `desligamentoStatus=SOLICITADO,OS_ABERTA` (aguardando retorno)
 - **Usuario** / **Papel** / **Permissao** — RBAC (ver seção 4)
 - **HistoricoStatus** — tabela de auditoria (entidade_tipo, entidade_id, status_anterior,
   status_novo, timestamp, usuario_id) — **necessária para calcular todas as métricas do
@@ -197,6 +211,8 @@ Todas as métricas abaixo dependem de `HistoricoStatus` com timestamps confiáve
 | Quantitativo: projetos encaminhados | `COUNT(Projeto WHERE status = ENCAMINHADO)` |
 | Quantitativo: projetos reprovados | `COUNT(Projeto WHERE status = REPROVADO)` |
 | Quantitativo: vistorias solicitadas | `COUNT(Vistoria)` |
+| Tempo médio de espera do desligamento | `desligamento_concluido_em - desligamento_solicitado_em` |
+| Quantitativo: desligamentos aguardando / com O.S. / concluídos | por `desligamento_status` |
 
 ### Implementação (feito)
 
