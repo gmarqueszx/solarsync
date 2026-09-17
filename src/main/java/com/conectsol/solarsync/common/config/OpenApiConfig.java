@@ -30,10 +30,11 @@ public class OpenApiConfig {
                         .description("""
                                 API do controle de homologação de projetos solares da ConectSol.
 
-                                Autenticação: POST /api/auth/login (e-mail e senha) ou \
-                                POST /api/auth/login/google (ID token do Google). Use o \
-                                accessToken como Bearer. Não há logout no servidor — a API é \
-                                stateless e o cliente descarta os tokens.
+                                Autenticação: POST /api/auth/login (e-mail e senha). Use o \
+                                accessToken como Bearer. Não há auto-cadastro: as contas são \
+                                criadas por ADMINISTRADOR ou GESTOR em POST /api/usuarios. Não \
+                                há logout no servidor — a API é stateless e o cliente descarta \
+                                os tokens.
 
                                 Mudanças de status são feitas por endpoints de ação \
                                 (ex.: POST /api/pendencias/{id}/resolver), nunca por PUT: é o \

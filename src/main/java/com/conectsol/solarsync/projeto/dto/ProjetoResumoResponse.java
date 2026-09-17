@@ -18,6 +18,8 @@ public record ProjetoResumoResponse(
         String analistaResponsavelNome,
         LocalDate dataRecebimento,
         LocalDate dataEncaminhado,
+        /** Vai na listagem porque é coluna da tabela e chave de busca, não detalhe. */
+        String numeroSolicitacao,
         LocalDate dataAprovacao,
         LocalDate dataInstalacao,
         BigDecimal potenciaKwp) {
@@ -35,6 +37,7 @@ public record ProjetoResumoResponse(
                         : projeto.getAnalistaResponsavel().getNome(),
                 projeto.getDataRecebimento(),
                 projeto.getDataEncaminhado(),
+                projeto.getNumeroSolicitacao(),
                 projeto.getDataAprovacao(),
                 projeto.getDataInstalacao(),
                 projeto.getPotenciaKwp());

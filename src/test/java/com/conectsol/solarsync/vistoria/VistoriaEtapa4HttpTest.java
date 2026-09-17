@@ -101,7 +101,7 @@ class VistoriaEtapa4HttpTest extends AbstractIntegrationTest {
         Integer clienteId = JsonPath.read(cliente, "$.id");
 
         String projeto = autenticada(post("/api/projetos"), """
-                {"clienteId": %d, "tipoProjeto": "PADRAO"}""".formatted(clienteId))
+                {"clienteId": %d, "tipoProjeto": "PROJETO_INICIAL"}""".formatted(clienteId))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         projetoId = JsonPath.read(projeto, "$.id");

@@ -1,6 +1,7 @@
 package com.conectsol.solarsync.pendencia;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 import java.util.List;
@@ -15,6 +16,12 @@ import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
 import com.conectsol.solarsync.common.AbstractIntegrationTest;
 import com.conectsol.solarsync.common.EntidadeTipo;
+import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
+import com.conectsol.solarsync.debito.DebitoRepository;
+import com.conectsol.solarsync.debito.DebitoService;
+import com.conectsol.solarsync.debito.StatusDebito;
+import com.conectsol.solarsync.debito.TipoDebito;
+import com.conectsol.solarsync.debito.dto.DebitoRegistrarRequest;
 import com.conectsol.solarsync.historico.HistoricoStatusRepository;
 import com.conectsol.solarsync.projeto.Projeto;
 import com.conectsol.solarsync.projeto.ProjetoRepository;
@@ -46,6 +53,12 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private HistoricoStatusRepository historicoStatusRepository;
 
+    @Autowired
+    private DebitoService debitoService;
+
+    @Autowired
+    private DebitoRepository debitoRepository;
+
     /** Só o usuário criado por este teste — nunca os semeados pelas migrations. */
     private Usuario analistaCriado;
 
@@ -58,6 +71,7 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
         historicoStatusRepository.deleteAll();
         projetoRepository.deleteAll();
         pendenciaRepository.deleteAll();
+        debitoRepository.deleteAll();
         if (analistaCriado != null) {
             usuarioRepository.deleteById(analistaCriado.getId());
             analistaCriado = null;
@@ -80,6 +94,26 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
                 .solicitadoEm(Instant.now())
                 .responsavel(analista)
                 .build());
+
+        // Resolver exige saber se o cliente deve: sem consulta registrada, a API recusa.
+        assertThatThrownBy(() -> pendenciaService.atualizarStatus(
+                pendencia.getId(), StatusPendencia.RESOLVIDA, analista.getId()))
+                .isInstanceOf(DebitoNaoConsultadoException.class);
+
+        // Consulta do tipo errado não serve: a de homologação responde outra pergunta, e
+        // aceitá-la aqui deixaria a pendência avançar sem ninguém ter olhado o que a trava.
+        debitoService.registrarConsulta(cliente.getId(),
+                new DebitoRegistrarRequest(TipoDebito.HOMOLOGACAO, StatusDebito.QUITADO,
+                        Instant.now()),
+                analista.getId());
+        assertThatThrownBy(() -> pendenciaService.atualizarStatus(
+                pendencia.getId(), StatusPendencia.RESOLVIDA, analista.getId()))
+                .isInstanceOf(DebitoNaoConsultadoException.class);
+
+        debitoService.registrarConsulta(cliente.getId(),
+                new DebitoRegistrarRequest(TipoDebito.PENDENCIA, StatusDebito.QUITADO,
+                        Instant.now()),
+                analista.getId());
 
         pendenciaService.atualizarStatus(pendencia.getId(), StatusPendencia.RESOLVIDA, analista.getId());
 

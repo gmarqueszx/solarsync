@@ -27,7 +27,7 @@ class ProjetoRepositoryTest {
 
         Projeto projeto = Projeto.builder()
                 .cliente(cliente)
-                .tipoProjeto(TipoProjeto.PADRAO)
+                .tipoProjeto(TipoProjeto.PROJETO_INICIAL)
                 .status(StatusProjeto.RECEBIDO)
                 .dataRecebimento(LocalDate.now())
                 .build();
@@ -38,6 +38,6 @@ class ProjetoRepositoryTest {
 
         Projeto encontrado = projetoRepository.findById(salvo.getId()).orElseThrow();
         assertThat(encontrado.getStatus()).isEqualTo(StatusProjeto.RECEBIDO);
-        assertThat(encontrado.getTipoProjeto()).isEqualTo(TipoProjeto.PADRAO);
+        assertThat(encontrado.getTipoProjeto()).isEqualTo(TipoProjeto.PROJETO_INICIAL);
     }
 }

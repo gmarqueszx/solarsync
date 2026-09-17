@@ -129,8 +129,11 @@ public class ProjetoController {
     @Operation(
             summary = "Encaminha o projeto à Coelba",
             description = "Sem dataEncaminhado no corpo, assume hoje. Essa data alimenta a "
-                    + "métrica de tempo entre recebimento e envio.")
-    @ApiResponse(responseCode = "409", description = "Transição inválida a partir do status atual")
+                    + "métrica de tempo entre recebimento e envio. Informe o numeroSolicitacao "
+                    + "devolvido pela Coelba: é por ele que o retorno por e-mail será casado "
+                    + "com o projeto. Exige consulta de débito de HOMOLOGACAO registrada.")
+    @ApiResponse(responseCode = "409",
+            description = "Transição inválida, cliente com débito, ou débito não consultado")
     public ProjetoResponse encaminhar(@PathVariable Long id,
             @RequestBody(required = false) @Valid ProjetoEncaminharRequest requisicao,
             @Autenticado UsuarioAutenticado usuario) {
@@ -138,19 +141,25 @@ public class ProjetoController {
         return ProjetoResponse.de(projetoService.encaminhar(id,
                 requisicao == null ? null : requisicao.dataArt(),
                 requisicao == null ? null : requisicao.dataEncaminhado(),
+                requisicao == null ? null : requisicao.numeroSolicitacao(),
                 usuario.id()));
     }
 
     @PostMapping("/{id}/reencaminhar")
     @PodeEscrever
-    @Operation(summary = "Reenvia o projeto após correção de uma reprova")
-    @ApiResponse(responseCode = "409", description = "Transição inválida a partir do status atual")
+    @Operation(
+            summary = "Reenvia o projeto após correção de uma reprova",
+            description = "Sem numeroSolicitacao no corpo, mantém o número já registrado.")
+    @ApiResponse(responseCode = "409",
+            description = "Transição inválida, cliente com débito, ou débito não consultado")
     public ProjetoResponse reencaminhar(@PathVariable Long id,
             @RequestBody(required = false) @Valid ProjetoEncaminharRequest requisicao,
             @Autenticado UsuarioAutenticado usuario) {
 
         return ProjetoResponse.de(projetoService.reencaminhar(id,
-                requisicao == null ? null : requisicao.dataEncaminhado(), usuario.id()));
+                requisicao == null ? null : requisicao.dataEncaminhado(),
+                requisicao == null ? null : requisicao.numeroSolicitacao(),
+                usuario.id()));
     }
 
     @PostMapping("/{id}/aprovar")

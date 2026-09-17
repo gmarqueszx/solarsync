@@ -148,7 +148,7 @@ class CamposDoContratoHttpTest extends AbstractIntegrationTest {
         Integer clienteId = JsonPath.read(cliente, "$.id");
 
         String projeto = enviar("/api/projetos", """
-                {"clienteId": %d, "tipoProjeto": "PADRAO", "potenciaKwp": 12.60}"""
+                {"clienteId": %d, "tipoProjeto": "PROJETO_INICIAL", "potenciaKwp": 12.60}"""
                 .formatted(clienteId))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.potenciaKwp").value(12.60))
@@ -181,7 +181,7 @@ class CamposDoContratoHttpTest extends AbstractIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
 
         enviar("/api/projetos", """
-                {"clienteId": %d, "tipoProjeto": "PADRAO", "potenciaKwp": -5}"""
+                {"clienteId": %d, "tipoProjeto": "PROJETO_INICIAL", "potenciaKwp": -5}"""
                 .formatted((Integer) JsonPath.read(cliente, "$.id")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("VALIDACAO"));

@@ -6,7 +6,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.conectsol.solarsync.auth.dto.LoginGoogleRequest;
 import com.conectsol.solarsync.auth.dto.LoginSenhaRequest;
 import com.conectsol.solarsync.auth.dto.RefreshRequest;
 import com.conectsol.solarsync.auth.dto.TokenResponse;
@@ -20,14 +19,20 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * Login por e-mail e senha, e renovação de token.
+ * <p>
+ * <b>Não há auto-cadastro nem login federado</b> (decisão do usuário em 16/09/2026, que removeu
+ * o login Google): entrar no sistema exige uma conta criada por ADMINISTRADOR ou GESTOR em
+ * {@code POST /api/usuarios}, com senha definida no cadastro.
+ */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@Tag(name = "Autenticação", description = "Login por senha ou Google, e renovação de token")
+@Tag(name = "Autenticação", description = "Login por e-mail e senha, e renovação de token")
 public class AutenticacaoController {
 
     private final LoginSenhaService loginSenhaService;
-    private final LoginGoogleService loginGoogleService;
     private final RenovacaoTokenService renovacaoTokenService;
 
     @PostMapping("/login")
@@ -36,17 +41,6 @@ public class AutenticacaoController {
     @ApiResponse(responseCode = "401", description = "Credenciais inválidas")
     public TokenResponse login(@RequestBody @Valid LoginSenhaRequest requisicao) {
         return loginSenhaService.autenticar(requisicao.email(), requisicao.senha());
-    }
-
-    @PostMapping("/login/google")
-    @Operation(
-            summary = "Login com ID token do Google",
-            description = "Não cria usuário: o e-mail precisa já estar cadastrado e ativo, e "
-                    + "pertencer a um domínio permitido.")
-    @ApiResponse(responseCode = "401", description = "Token inválido, domínio não permitido ou "
-            + "usuário não cadastrado/inativo")
-    public TokenResponse loginGoogle(@RequestBody @Valid LoginGoogleRequest requisicao) {
-        return loginGoogleService.autenticar(requisicao.idToken());
     }
 
     @PostMapping("/refresh")

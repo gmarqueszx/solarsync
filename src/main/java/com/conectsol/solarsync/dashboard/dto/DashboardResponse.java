@@ -16,11 +16,23 @@ import java.time.LocalDate;
  */
 public record DashboardResponse(
         Periodo periodo,
+        Filtro filtro,
         TemposMediosEmDias temposMediosEmDias,
         Quantitativos quantitativos) {
 
     /** Limites aplicados; nulo em qualquer ponta significa "sem limite daquele lado". */
     public record Periodo(LocalDate de, LocalDate ate) {
+    }
+
+    /**
+     * Recortes que não são de data. Hoje só o analista: nulo é a equipe inteira, e é o padrão.
+     * <p>
+     * Volta na resposta para a tela poder rotular os números com o recorte a que pertencem — "3
+     * projetos aprovados" diz coisas bem diferentes com e sem filtro de pessoa. O nome vem
+     * junto do id para a tela não precisar cruzar com a lista de usuários só para escrever um
+     * cabeçalho.
+     */
+    public record Filtro(Long analistaId, String analistaNome) {
     }
 
     public record TemposMediosEmDias(
@@ -51,7 +63,11 @@ public record DashboardResponse(
             long projetosReprovados,
             /** Situação de agora, não do período: quem está travado neste momento. */
             long clientesComDebitoAtivo,
-            /** Também situação de agora, para dar denominador ao número acima. */
+            /** Dos travados, quantos não conseguem nem resolver a pendência na Coelba. */
+            long clientesTravadosNaPendencia,
+            /** Dos travados, quantos estão com o projeto pronto e o envio bloqueado. */
+            long clientesTravadosNaHomologacao,
+            /** Também situação de agora, para dar denominador aos números acima. */
             long clientesComDebitoQuitado,
             long vistoriasSolicitadas,
             long vistoriasAprovadas,

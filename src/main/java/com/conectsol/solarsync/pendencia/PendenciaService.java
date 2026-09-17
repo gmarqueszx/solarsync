@@ -12,7 +12,11 @@ import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.auth.UsuarioRepository;
 import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
+import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
+import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
+import com.conectsol.solarsync.debito.DebitoService;
+import com.conectsol.solarsync.debito.TipoDebito;
 import com.conectsol.solarsync.pendencia.dto.PendenciaAtualizarRequest;
 import com.conectsol.solarsync.pendencia.dto.PendenciaCriarRequest;
 import com.conectsol.solarsync.pendencia.dto.PendenciaFiltro;
@@ -33,6 +37,7 @@ public class PendenciaService {
     private final PendenciaRepository pendenciaRepository;
     private final ClienteRepository clienteRepository;
     private final UsuarioRepository usuarioRepository;
+    private final DebitoService debitoService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
@@ -114,6 +119,10 @@ public class PendenciaService {
             throw new TransicaoStatusInvalidaException("Pendência", statusAnterior, novoStatus);
         }
 
+        if (novoStatus == StatusPendencia.RESOLVIDA) {
+            exigirClienteSemDebito(pendencia.getCliente().getId());
+        }
+
         pendencia.setStatus(novoStatus);
         pendencia.setResolvidoEm(
                 novoStatus == StatusPendencia.RESOLVIDA ? Instant.now() : null);
@@ -128,6 +137,35 @@ public class PendenciaService {
                 usuarioId));
 
         return salva;
+    }
+
+    /**
+     * Etapa 1 do fluxo: só se resolve pendência de cliente sem débito — com débito, a pendência
+     * fica travada até a quitação. Guarda no service, e não no controller, para valer também
+     * quando a origem for a leitura de e-mail ou um webhook do CRM.
+     * <p>
+     * Olha <b>só</b> o débito do tipo {@code PENDENCIA}: é o que impede a Coelba de executar a
+     * troca de titularidade, a ligação nova e afins. Débito que trava a homologação não tem
+     * nada a ver com esta etapa, e barrar por ele deixaria a pendência parada por um motivo
+     * que quem a trabalha não consegue resolver.
+     * <p>
+     * São <b>duas</b> recusas diferentes de propósito, e o {@code codigo} do erro distingue
+     * qual: {@code DEBITO_NAO_CONSULTADO} pede a consulta na agência virtual (ninguém sabe se
+     * o cliente deve), {@code CLIENTE_COM_DEBITO} pede a cobrança (sabe-se que deve). Juntar
+     * as duas numa mensagem só mandaria a analista cobrar um cliente que talvez não deva nada.
+     * <p>
+     * A pendência <b>não</b> muda de status quando está travada. "Travada por débito" é fato
+     * derivado (pendência aberta + débito ativo), exposto pelo filtro
+     * {@code ?travadaPorDebito=true} — um status próprio precisaria ser desfeito por outro
+     * evento quando o cliente quitasse, e viveria dessincronizado de {@code debito.status}.
+     */
+    private void exigirClienteSemDebito(Long clienteId) {
+        if (!debitoService.clienteTemConsultaRegistrada(clienteId, TipoDebito.PENDENCIA)) {
+            throw new DebitoNaoConsultadoException(clienteId, TipoDebito.PENDENCIA);
+        }
+        if (debitoService.clienteTemDebitoAtivo(clienteId, TipoDebito.PENDENCIA)) {
+            throw new ClienteComDebitoException(clienteId, "resolver a pendência");
+        }
     }
 
     private Usuario resolverResponsavel(Long responsavelId) {

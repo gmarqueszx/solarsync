@@ -29,7 +29,7 @@ class VistoriaRepositoryTest {
         Cliente cliente = entityManager.persistFlushFind(Cliente.builder().nome("Cliente Vistoria").build());
         Projeto projeto = entityManager.persistFlushFind(Projeto.builder()
                 .cliente(cliente)
-                .tipoProjeto(TipoProjeto.PADRAO)
+                .tipoProjeto(TipoProjeto.PROJETO_INICIAL)
                 .status(StatusProjeto.APROVADO)
                 .build());
 

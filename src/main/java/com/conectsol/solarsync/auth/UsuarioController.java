@@ -15,11 +15,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.conectsol.solarsync.auth.dto.DefinirSenhaRequest;
-import com.conectsol.solarsync.auth.dto.UsuarioRequest;
+import com.conectsol.solarsync.auth.dto.UsuarioAtualizarRequest;
+import com.conectsol.solarsync.auth.dto.UsuarioCriarRequest;
 import com.conectsol.solarsync.auth.dto.UsuarioResponse;
 import com.conectsol.solarsync.auth.dto.UsuarioResumoResponse;
+import com.conectsol.solarsync.common.security.Autenticado;
+import com.conectsol.solarsync.common.security.GerenciaUsuarios;
 import com.conectsol.solarsync.common.security.PodeLer;
 import com.conectsol.solarsync.common.security.SomenteAdministrador;
+import com.conectsol.solarsync.common.security.UsuarioAutenticado;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -30,7 +34,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/usuarios")
 @RequiredArgsConstructor
-@Tag(name = "Usuários", description = "Gestão de acesso — restrita a ADMINISTRADOR")
+@Tag(name = "Usuários", description = "Gestão de acesso — restrita a ADMINISTRADOR e GESTOR")
 public class UsuarioController {
 
     private final UsuarioService usuarioService;
@@ -45,60 +49,74 @@ public class UsuarioController {
     }
 
     @GetMapping
-    @SomenteAdministrador
+    @GerenciaUsuarios
     @Operation(summary = "Lista os usuários com papéis e situação")
     public List<UsuarioResponse> listar() {
         return usuarioService.listar();
     }
 
     @GetMapping("/{id}")
-    @SomenteAdministrador
+    @GerenciaUsuarios
     public UsuarioResponse buscar(@PathVariable Long id) {
         return usuarioService.buscar(id);
     }
 
     @PostMapping
-    @SomenteAdministrador
+    @GerenciaUsuarios
     @Operation(
             summary = "Cadastra um usuário",
-            description = "Sem senha, o usuário entra apenas pelo Google. Cadastro prévio é "
-                    + "obrigatório: o login Google não cria conta.")
+            description = "Único caminho de entrada de gente no sistema: não há auto-cadastro. "
+                    + "A senha é obrigatória e provisória — quem recebe a conta troca em "
+                    + "POST /api/usuarios/{id}/senha. Só um ADMINISTRADOR concede o papel "
+                    + "ADMINISTRADOR.")
     @ApiResponse(responseCode = "409", description = "E-mail já cadastrado")
-    public ResponseEntity<UsuarioResponse> criar(@RequestBody @Valid UsuarioRequest requisicao) {
-        UsuarioResponse criado = usuarioService.criar(requisicao);
+    @ApiResponse(responseCode = "403", description = "GESTOR tentando criar um ADMINISTRADOR")
+    public ResponseEntity<UsuarioResponse> criar(
+            @RequestBody @Valid UsuarioCriarRequest requisicao,
+            @Autenticado UsuarioAutenticado autor) {
+
+        UsuarioResponse criado = usuarioService.criar(requisicao, autor);
         return ResponseEntity.created(URI.create("/api/usuarios/" + criado.id())).body(criado);
     }
 
     @PutMapping("/{id}")
-    @SomenteAdministrador
+    @GerenciaUsuarios
+    @Operation(summary = "Edita nome, e-mail e papéis; a senha tem endpoint próprio")
+    @ApiResponse(responseCode = "403", description = "GESTOR tentando alterar um ADMINISTRADOR")
     public UsuarioResponse atualizar(@PathVariable Long id,
-            @RequestBody @Valid UsuarioRequest requisicao) {
-        return usuarioService.atualizar(id, requisicao);
+            @RequestBody @Valid UsuarioAtualizarRequest requisicao,
+            @Autenticado UsuarioAutenticado autor) {
+
+        return usuarioService.atualizar(id, requisicao, autor);
     }
 
     @PostMapping("/{id}/senha")
-    @SomenteAdministrador
+    @GerenciaUsuarios
     @Operation(summary = "Define ou redefine a senha do usuário")
     public UsuarioResponse definirSenha(@PathVariable Long id,
-            @RequestBody @Valid DefinirSenhaRequest requisicao) {
-        return usuarioService.definirSenha(id, requisicao.senha());
+            @RequestBody @Valid DefinirSenhaRequest requisicao,
+            @Autenticado UsuarioAutenticado autor) {
+
+        return usuarioService.definirSenha(id, requisicao.senha(), autor);
     }
 
     @PostMapping("/{id}/ativar")
-    @SomenteAdministrador
-    public UsuarioResponse ativar(@PathVariable Long id) {
-        return usuarioService.alterarAtivacao(id, true);
+    @GerenciaUsuarios
+    public UsuarioResponse ativar(@PathVariable Long id,
+            @Autenticado UsuarioAutenticado autor) {
+        return usuarioService.alterarAtivacao(id, true, autor);
     }
 
     @PostMapping("/{id}/desativar")
-    @SomenteAdministrador
+    @GerenciaUsuarios
     @Operation(
             summary = "Desativa o usuário",
             description = "É a forma correta de cortar acesso de quem saiu: o access token "
                     + "expira em minutos e a renovação passa a ser negada, preservando a "
                     + "auditoria que a exclusão destruiria.")
-    public UsuarioResponse desativar(@PathVariable Long id) {
-        return usuarioService.alterarAtivacao(id, false);
+    public UsuarioResponse desativar(@PathVariable Long id,
+            @Autenticado UsuarioAutenticado autor) {
+        return usuarioService.alterarAtivacao(id, false, autor);
     }
 
     @DeleteMapping("/{id}")

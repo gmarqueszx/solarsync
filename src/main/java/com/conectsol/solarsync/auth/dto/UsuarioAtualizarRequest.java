@@ -10,12 +10,12 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
 /**
- * @param senha opcional: sem senha, o usuário entra apenas pelo Google (é o caminho normal
- *              aqui, já que a equipe usa Google Workspace)
+ * Edição do cadastro. <b>Sem campo senha</b>: trocar senha é
+ * {@code POST /api/usuarios/{id}/senha}, e aceitá-la aqui faria um formulário de correção de
+ * nome resetar a senha de quem esqueceu de preencher o campo.
  */
-public record UsuarioRequest(
+public record UsuarioAtualizarRequest(
         @NotBlank @Size(max = 150) String nome,
         @NotBlank @Email @Size(max = 150) String email,
-        @NotEmpty Set<NomePapel> papeis,
-        @Size(min = 8, max = 100) String senha) {
+        @NotEmpty Set<NomePapel> papeis) {
 }

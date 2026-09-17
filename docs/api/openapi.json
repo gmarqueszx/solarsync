@@ -1,7 +1,7 @@
 {
   "openapi" : "3.1.0",
   "info" : {
-    "description" : "API do controle de homologação de projetos solares da ConectSol.\n\nAutenticação: POST /api/auth/login (e-mail e senha) ou POST /api/auth/login/google (ID token do Google). Use o accessToken como Bearer. Não há logout no servidor — a API é stateless e o cliente descarta os tokens.\n\nMudanças de status são feitas por endpoints de ação (ex.: POST /api/pendencias/{id}/resolver), nunca por PUT: é o que garante a automação entre etapas e a auditoria.",
+    "description" : "API do controle de homologação de projetos solares da ConectSol.\n\nAutenticação: POST /api/auth/login (e-mail e senha). Use o accessToken como Bearer. Não há auto-cadastro: as contas são criadas por ADMINISTRADOR ou GESTOR em POST /api/usuarios. Não há logout no servidor — a API é stateless e o cliente descarta os tokens.\n\nMudanças de status são feitas por endpoints de ação (ex.: POST /api/pendencias/{id}/resolver), nunca por PUT: é o que garante a automação entre etapas e a auditoria.",
     "title" : "SolarSync API",
     "version" : "v1"
   },
@@ -16,23 +16,23 @@
     "description" : "Cadastro base do fluxo de homologação",
     "name" : "Clientes"
   }, {
+    "description" : "Métricas de tempo de ciclo e quantitativos do fluxo",
+    "name" : "Dashboard"
+  }, {
     "description" : "Etapa 2: situação de débito do cliente na Coelba",
     "name" : "Débitos"
   }, {
     "description" : "Etapa 1: pendências do cliente na Coelba",
     "name" : "Pendências"
   }, {
-    "description" : "Login por senha ou Google, e renovação de token",
+    "description" : "Login por e-mail e senha, e renovação de token",
     "name" : "Autenticação"
   }, {
-    "description" : "Gestão de acesso — restrita a ADMINISTRADOR",
+    "description" : "Gestão de acesso — restrita a ADMINISTRADOR e GESTOR",
     "name" : "Usuários"
   }, {
     "description" : "Etapa 4: vistoria da Coelba após a instalação",
     "name" : "Vistorias"
-  }, {
-    "description" : "Métricas gerenciais — restrito a GESTOR e ADMINISTRADOR",
-    "name" : "Dashboard"
   }, {
     "description" : "Etapas 2 e 3: homologação e acompanhamento na Coelba",
     "name" : "Projetos"
@@ -99,36 +99,6 @@
         "tags" : [ "Autenticação" ]
       }
     },
-    "/api/auth/login/google" : {
-      "post" : {
-        "description" : "Não cria usuário: o e-mail precisa já estar cadastrado e ativo, e pertencer a um domínio permitido.",
-        "operationId" : "loginGoogle",
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/LoginGoogleRequest"
-              }
-            }
-          },
-          "required" : true
-        },
-        "responses" : {
-          "401" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/TokenResponse"
-                }
-              }
-            },
-            "description" : "Token inválido, domínio não permitido ou usuário não cadastrado/inativo"
-          }
-        },
-        "summary" : "Login com ID token do Google",
-        "tags" : [ "Autenticação" ]
-      }
-    },
     "/api/auth/refresh" : {
       "post" : {
         "description" : "O usuário é relido no banco: quem foi desativado não renova. Não há logout no servidor — a API é stateless, o cliente descarta os tokens.",
@@ -161,13 +131,14 @@
     },
     "/api/clientes" : {
       "get" : {
+        "description" : "`nome` casa nome ou UC Coelba. `statusTriagem=AGUARDANDO_VERIFICACAO` é a fila de quem ninguém checou na Coelba ainda; `semConsultaDebito=true` é a fila da consulta de débito, que precede tanto a resolução da pendência quanto o projeto.",
         "operationId" : "listar_5",
         "parameters" : [ {
           "in" : "query",
-          "name" : "nome",
-          "required" : false,
+          "name" : "filtro",
+          "required" : true,
           "schema" : {
-            "type" : "string"
+            "$ref" : "#/components/schemas/ClienteFiltro"
           }
         }, {
           "in" : "query",
@@ -189,7 +160,7 @@
             "description" : "OK"
           }
         },
-        "summary" : "Lista clientes paginados, com busca por nome",
+        "summary" : "Lista clientes paginados, com busca e filtros de fila",
         "tags" : [ "Clientes" ]
       },
       "post" : {
@@ -217,6 +188,26 @@
           }
         },
         "summary" : "Cadastra um cliente",
+        "tags" : [ "Clientes" ]
+      }
+    },
+    "/api/clientes/aguardando-verificacao/quantidade" : {
+      "get" : {
+        "operationId" : "quantidadeAguardandoVerificacao",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "integer",
+                  "format" : "int64"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Tamanho da fila de triagem, sem paginar a lista",
         "tags" : [ "Clientes" ]
       }
     },
@@ -300,9 +291,98 @@
         "tags" : [ "Clientes" ]
       }
     },
+    "/api/clientes/{id}/historico" : {
+      "get" : {
+        "operationId" : "historico_4",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/HistoricoStatusResponse"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Linha do tempo da triagem de pendência do cliente",
+        "tags" : [ "Clientes" ]
+      }
+    },
+    "/api/clientes/{id}/reverificar" : {
+      "post" : {
+        "description" : "Para o novo ciclo (uma ampliação meses depois) ou para desfazer marcação errada. Não apaga o projeto já criado.",
+        "operationId" : "reverificar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ClienteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Devolve o cliente para a fila de verificação de pendência",
+        "tags" : [ "Clientes" ]
+      }
+    },
+    "/api/clientes/{id}/sem-pendencia" : {
+      "post" : {
+        "description" : "Etapa 1 do fluxo pelo caminho \"segue direto\". Cria o Projeto do cliente em RECEBIDO e o coloca na fila de consulta de débito. Se já houver projeto em andamento, nenhum novo é criado.",
+        "operationId" : "marcarSemPendencia",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ClienteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Registra que a Coelba foi checada e o cliente não tem pendência",
+        "tags" : [ "Clientes" ]
+      }
+    },
     "/api/dashboard" : {
       "get" : {
-        "description" : "As 13 métricas numa resposta só. Cada uma é filtrada pela sua própria data de referência — projetos aprovados pela data de aprovação, pendências resolvidas pela data de resolução —, respondendo \"no período X, como foi o desempenho\".\n\nTempos são médias em dias e podem vir nulos: nulo é \"não houve caso no período\", diferente de zero. A única exceção ao filtro é clientesComDebitoAtivo, que é a situação de agora — quantos clientes estão travados neste momento.\n\nSem de/ate, considera todo o histórico.",
+        "description" : "As 13 métricas numa resposta só. Cada uma é filtrada pela sua própria data de referência — projetos aprovados pela data de aprovação, pendências resolvidas pela data de resolução —, respondendo \"no período X, como foi o desempenho\".\n\nTempos são médias em dias e podem vir nulos: nulo é \"não houve caso no período\", diferente de zero. A única exceção ao filtro é clientesComDebitoAtivo, que é a situação de agora — quantos clientes estão travados neste momento.\n\nSem de/ate, considera todo o histórico.\n\nanalistaId recorta tudo pelo responsável da etapa — que é uma coluna diferente em cada uma (responsável da pendência, analista do projeto, quem consultou o débito, projetista da unificação). Sem ele, a equipe inteira.",
         "operationId" : "metricas",
         "parameters" : [ {
           "in" : "query",
@@ -320,9 +400,17 @@
             "type" : "string",
             "format" : "date"
           }
+        }, {
+          "in" : "query",
+          "name" : "analistaId",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
         } ],
         "responses" : {
-          "403" : {
+          "200" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -330,7 +418,7 @@
                 }
               }
             },
-            "description" : "ANALISTA não tem acesso ao dashboard"
+            "description" : "OK"
           }
         },
         "summary" : "Métricas de tempo de ciclo e quantitativos do período",
@@ -339,7 +427,7 @@
     },
     "/api/debitos" : {
       "get" : {
-        "description" : "Filtre por status=ATIVO para ver quem está travado, ou use consultadoAntesDe para achar consultas velhas que valem refazer.",
+        "description" : "Filtre por tipo=PENDENCIA/HOMOLOGACAO para ver o que está travando cada etapa, por status=ATIVO para ver quem está travado, por paradoHaMaisDeDias para a fila do financeiro, ou use consultadoAntesDe para achar consultas velhas que valem refazer.",
         "operationId" : "listar_6",
         "parameters" : [ {
           "in" : "query",
@@ -374,6 +462,7 @@
     },
     "/api/debitos/cliente/{clienteId}" : {
       "get" : {
+        "description" : "Até dois registros: o débito que trava a pendência e o que trava a homologação. Lista vazia significa que ninguém consultou este cliente ainda — que é diferente de não dever nada.",
         "operationId" : "buscarPorCliente",
         "parameters" : [ {
           "in" : "path",
@@ -389,18 +478,21 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/DebitoResponse"
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/DebitoResponse"
+                  }
                 }
               }
             },
             "description" : "OK"
           }
         },
-        "summary" : "Situação de débito de um cliente",
+        "summary" : "Situações de débito de um cliente",
         "tags" : [ "Débitos" ]
       },
       "put" : {
-        "description" : "Enquanto o status for ATIVO, encaminhar o projeto do cliente à Coelba é bloqueado com 409. Reconsultar e achar a mesma situação só atualiza a data, sem gerar linha nova de histórico.",
+        "description" : "O tipo diz que etapa esta consulta responde. Com PENDENCIA ativo, resolver a pendência é bloqueado com 409; com HOMOLOGACAO ativo, encaminhar o projeto à Coelba é bloqueado com 409. Reconsultar e achar a mesma situação só atualiza a data, sem gerar linha nova de histórico.",
         "operationId" : "registrarConsulta",
         "parameters" : [ {
           "in" : "path",
@@ -1070,7 +1162,7 @@
     },
     "/api/projetos/{id}/encaminhar" : {
       "post" : {
-        "description" : "Sem dataEncaminhado no corpo, assume hoje. Essa data alimenta a métrica de tempo entre recebimento e envio.",
+        "description" : "Sem dataEncaminhado no corpo, assume hoje. Essa data alimenta a métrica de tempo entre recebimento e envio. Informe o numeroSolicitacao devolvido pela Coelba: é por ele que o retorno por e-mail será casado com o projeto. Exige consulta de débito de HOMOLOGACAO registrada.",
         "operationId" : "encaminhar",
         "parameters" : [ {
           "in" : "path",
@@ -1099,7 +1191,7 @@
                 }
               }
             },
-            "description" : "Transição inválida a partir do status atual"
+            "description" : "Transição inválida, cliente com débito, ou débito não consultado"
           }
         },
         "summary" : "Encaminha o projeto à Coelba",
@@ -1139,6 +1231,7 @@
     },
     "/api/projetos/{id}/reencaminhar" : {
       "post" : {
+        "description" : "Sem numeroSolicitacao no corpo, mantém o número já registrado.",
         "operationId" : "reencaminhar",
         "parameters" : [ {
           "in" : "path",
@@ -1167,7 +1260,7 @@
                 }
               }
             },
-            "description" : "Transição inválida a partir do status atual"
+            "description" : "Transição inválida, cliente com débito, ou débito não consultado"
           }
         },
         "summary" : "Reenvia o projeto após correção de uma reprova",
@@ -1580,19 +1673,29 @@
         "tags" : [ "Usuários" ]
       },
       "post" : {
-        "description" : "Sem senha, o usuário entra apenas pelo Google. Cadastro prévio é obrigatório: o login Google não cria conta.",
+        "description" : "Único caminho de entrada de gente no sistema: não há auto-cadastro. A senha é obrigatória e provisória — quem recebe a conta troca em POST /api/usuarios/{id}/senha. Só um ADMINISTRADOR concede o papel ADMINISTRADOR.",
         "operationId" : "criar",
         "requestBody" : {
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/UsuarioRequest"
+                "$ref" : "#/components/schemas/UsuarioCriarRequest"
               }
             }
           },
           "required" : true
         },
         "responses" : {
+          "403" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/UsuarioResponse"
+                }
+              }
+            },
+            "description" : "GESTOR tentando criar um ADMINISTRADOR"
+          },
           "409" : {
             "content" : {
               "*/*" : {
@@ -1698,14 +1801,14 @@
           "content" : {
             "application/json" : {
               "schema" : {
-                "$ref" : "#/components/schemas/UsuarioRequest"
+                "$ref" : "#/components/schemas/UsuarioAtualizarRequest"
               }
             }
           },
           "required" : true
         },
         "responses" : {
-          "200" : {
+          "403" : {
             "content" : {
               "*/*" : {
                 "schema" : {
@@ -1713,9 +1816,10 @@
                 }
               }
             },
-            "description" : "OK"
+            "description" : "GESTOR tentando alterar um ADMINISTRADOR"
           }
         },
+        "summary" : "Edita nome, e-mail e papéis; a senha tem endpoint próprio",
         "tags" : [ "Usuários" ]
       }
     },
@@ -2069,6 +2173,24 @@
   },
   "components" : {
     "schemas" : {
+      "ClienteFiltro" : {
+        "type" : "object",
+        "properties" : {
+          "nome" : {
+            "type" : "string"
+          },
+          "semConsultaDebito" : {
+            "type" : "boolean"
+          },
+          "statusTriagem" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "AGUARDANDO_VERIFICACAO", "COM_PENDENCIA", "SEM_PENDENCIA" ]
+            }
+          }
+        }
+      },
       "ClienteRequest" : {
         "type" : "object",
         "properties" : {
@@ -2121,6 +2243,10 @@
           "nome" : {
             "type" : "string"
           },
+          "statusTriagem" : {
+            "type" : "string",
+            "enum" : [ "AGUARDANDO_VERIFICACAO", "COM_PENDENCIA", "SEM_PENDENCIA" ]
+          },
           "telefone" : {
             "type" : "string"
           },
@@ -2168,6 +2294,9 @@
       "DashboardResponse" : {
         "type" : "object",
         "properties" : {
+          "filtro" : {
+            "$ref" : "#/components/schemas/Filtro"
+          },
           "periodo" : {
             "$ref" : "#/components/schemas/Periodo"
           },
@@ -2199,6 +2328,11 @@
             "type" : "string",
             "format" : "date-time"
           },
+          "paradoHaMaisDeDias" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 0
+          },
           "q" : {
             "type" : "string",
             "maxLength" : 150,
@@ -2211,6 +2345,10 @@
               "enum" : [ "ATIVO", "QUITADO" ]
             },
             "uniqueItems" : true
+          },
+          "tipo" : {
+            "type" : "string",
+            "enum" : [ "PENDENCIA", "HOMOLOGACAO" ]
           }
         }
       },
@@ -2224,9 +2362,13 @@
           "status" : {
             "type" : "string",
             "enum" : [ "ATIVO", "QUITADO" ]
+          },
+          "tipo" : {
+            "type" : "string",
+            "enum" : [ "PENDENCIA", "HOMOLOGACAO" ]
           }
         },
-        "required" : [ "status" ]
+        "required" : [ "status", "tipo" ]
       },
       "DebitoResponse" : {
         "type" : "object",
@@ -2238,17 +2380,36 @@
           "cliente" : {
             "$ref" : "#/components/schemas/ClienteResumoResponse"
           },
+          "consultadoPor" : {
+            "$ref" : "#/components/schemas/UsuarioResumoResponse"
+          },
           "criadoEm" : {
             "type" : "string",
             "format" : "date-time"
+          },
+          "detectadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "diasParado" : {
+            "type" : "integer",
+            "format" : "int64"
           },
           "id" : {
             "type" : "integer",
             "format" : "int64"
           },
+          "quitadoEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
           "status" : {
             "type" : "string",
             "enum" : [ "ATIVO", "QUITADO" ]
+          },
+          "tipo" : {
+            "type" : "string",
+            "enum" : [ "PENDENCIA", "HOMOLOGACAO" ]
           },
           "ultimaConsultaEm" : {
             "type" : "string",
@@ -2266,6 +2427,18 @@
           }
         },
         "required" : [ "senha" ]
+      },
+      "Filtro" : {
+        "type" : "object",
+        "properties" : {
+          "analistaId" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "analistaNome" : {
+            "type" : "string"
+          }
+        }
       },
       "HistoricoStatusResponse" : {
         "type" : "object",
@@ -2297,16 +2470,6 @@
             "format" : "int64"
           }
         }
-      },
-      "LoginGoogleRequest" : {
-        "type" : "object",
-        "properties" : {
-          "idToken" : {
-            "type" : "string",
-            "minLength" : 1
-          }
-        },
-        "required" : [ "idToken" ]
       },
       "LoginSenhaRequest" : {
         "type" : "object",
@@ -2559,7 +2722,7 @@
           },
           "tipo" : {
             "type" : "string",
-            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "AUMENTO_CARGA", "MUDANCA_PADRAO", "DESMEMBRAMENTO", "REGULARIZACAO_CADASTRAL", "DEBITO_VINCULADO", "ADEQUACAO_TECNICA", "OUTRA" ]
           }
         },
         "required" : [ "tipo" ]
@@ -2586,7 +2749,7 @@
           },
           "tipo" : {
             "type" : "string",
-            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "AUMENTO_CARGA", "MUDANCA_PADRAO", "DESMEMBRAMENTO", "REGULARIZACAO_CADASTRAL", "DEBITO_VINCULADO", "ADEQUACAO_TECNICA", "OUTRA" ]
           }
         },
         "required" : [ "clienteId", "tipo" ]
@@ -2607,6 +2770,9 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "semConsultaDebito" : {
+            "type" : "boolean"
+          },
           "solicitadoAte" : {
             "type" : "string",
             "format" : "date-time"
@@ -2625,7 +2791,10 @@
           },
           "tipo" : {
             "type" : "string",
-            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "AUMENTO_CARGA", "MUDANCA_PADRAO", "DESMEMBRAMENTO", "REGULARIZACAO_CADASTRAL", "DEBITO_VINCULADO", "ADEQUACAO_TECNICA", "OUTRA" ]
+          },
+          "travadaPorDebito" : {
+            "type" : "boolean"
           }
         }
       },
@@ -2667,7 +2836,7 @@
           },
           "tipo" : {
             "type" : "string",
-            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "AUMENTO_CARGA", "MUDANCA_PADRAO", "DESMEMBRAMENTO", "REGULARIZACAO_CADASTRAL", "DEBITO_VINCULADO", "ADEQUACAO_TECNICA", "OUTRA" ]
           }
         }
       },
@@ -2706,7 +2875,7 @@
           },
           "tipo" : {
             "type" : "string",
-            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "OUTRA" ]
+            "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "AUMENTO_CARGA", "MUDANCA_PADRAO", "DESMEMBRAMENTO", "REGULARIZACAO_CADASTRAL", "DEBITO_VINCULADO", "ADEQUACAO_TECNICA", "OUTRA" ]
           }
         }
       },
@@ -2747,13 +2916,18 @@
             "type" : "string",
             "format" : "date"
           },
+          "numeroSolicitacao" : {
+            "type" : "string",
+            "maxLength" : 50,
+            "minLength" : 0
+          },
           "potenciaKwp" : {
             "type" : "number",
             "minimum" : 0
           },
           "tipoProjeto" : {
             "type" : "string",
-            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+            "enum" : [ "PROJETO_INICIAL", "AMPLIACAO", "CORRECAO" ]
           }
         },
         "required" : [ "tipoProjeto" ]
@@ -2777,13 +2951,18 @@
             "type" : "string",
             "format" : "date"
           },
+          "numeroSolicitacao" : {
+            "type" : "string",
+            "maxLength" : 50,
+            "minLength" : 0
+          },
           "potenciaKwp" : {
             "type" : "number",
             "minimum" : 0
           },
           "tipoProjeto" : {
             "type" : "string",
-            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+            "enum" : [ "PROJETO_INICIAL", "AMPLIACAO", "CORRECAO" ]
           }
         },
         "required" : [ "clienteId", "tipoProjeto" ]
@@ -2798,6 +2977,11 @@
           "dataEncaminhado" : {
             "type" : "string",
             "format" : "date"
+          },
+          "numeroSolicitacao" : {
+            "type" : "string",
+            "maxLength" : 50,
+            "minLength" : 0
           }
         }
       },
@@ -2828,6 +3012,9 @@
             "type" : "string",
             "format" : "date"
           },
+          "semConsultaDebito" : {
+            "type" : "boolean"
+          },
           "semVistoria" : {
             "type" : "boolean"
           },
@@ -2841,7 +3028,10 @@
           },
           "tipoProjeto" : {
             "type" : "string",
-            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+            "enum" : [ "PROJETO_INICIAL", "AMPLIACAO", "CORRECAO" ]
+          },
+          "travadoPorDebito" : {
+            "type" : "boolean"
           }
         }
       },
@@ -2889,6 +3079,9 @@
           "motivoReprova" : {
             "type" : "string"
           },
+          "numeroSolicitacao" : {
+            "type" : "string"
+          },
           "potenciaKwp" : {
             "type" : "number"
           },
@@ -2898,7 +3091,7 @@
           },
           "tipoProjeto" : {
             "type" : "string",
-            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+            "enum" : [ "PROJETO_INICIAL", "AMPLIACAO", "CORRECAO" ]
           }
         }
       },
@@ -2939,6 +3132,9 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "numeroSolicitacao" : {
+            "type" : "string"
+          },
           "potenciaKwp" : {
             "type" : "number"
           },
@@ -2948,7 +3144,7 @@
           },
           "tipoProjeto" : {
             "type" : "string",
-            "enum" : [ "PADRAO", "AMPLIACAO", "AUMENTO_POTENCIA", "MUDANCA_INVERSOR", "PROJETO_UMA_PLACA_A_MAIS", "INVERSORES_SEPARADOS" ]
+            "enum" : [ "PROJETO_INICIAL", "AMPLIACAO", "CORRECAO" ]
           }
         }
       },
@@ -2960,6 +3156,14 @@
             "format" : "int64"
           },
           "clientesComDebitoQuitado" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "clientesTravadosNaHomologacao" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "clientesTravadosNaPendencia" : {
             "type" : "integer",
             "format" : "int64"
           },
@@ -3220,29 +3424,33 @@
           }
         }
       },
-      "UsuarioLogadoResponse" : {
+      "UsuarioAtualizarRequest" : {
         "type" : "object",
         "properties" : {
           "email" : {
-            "type" : "string"
-          },
-          "id" : {
-            "type" : "integer",
-            "format" : "int64"
+            "type" : "string",
+            "format" : "email",
+            "maxLength" : 150,
+            "minLength" : 0
           },
           "nome" : {
-            "type" : "string"
+            "type" : "string",
+            "maxLength" : 150,
+            "minLength" : 0
           },
           "papeis" : {
             "type" : "array",
             "items" : {
               "type" : "string",
               "enum" : [ "ADMINISTRADOR", "GESTOR", "ANALISTA" ]
-            }
+            },
+            "minItems" : 1,
+            "uniqueItems" : true
           }
-        }
+        },
+        "required" : [ "email", "nome", "papeis" ]
       },
-      "UsuarioRequest" : {
+      "UsuarioCriarRequest" : {
         "type" : "object",
         "properties" : {
           "email" : {
@@ -3271,7 +3479,29 @@
             "minLength" : 8
           }
         },
-        "required" : [ "email", "nome", "papeis" ]
+        "required" : [ "email", "nome", "papeis", "senha" ]
+      },
+      "UsuarioLogadoResponse" : {
+        "type" : "object",
+        "properties" : {
+          "email" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "nome" : {
+            "type" : "string"
+          },
+          "papeis" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "ADMINISTRADOR", "GESTOR", "ANALISTA" ]
+            }
+          }
+        }
       },
       "UsuarioResponse" : {
         "type" : "object",

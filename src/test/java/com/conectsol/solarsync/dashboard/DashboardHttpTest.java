@@ -93,6 +93,7 @@ class DashboardHttpTest extends AbstractIntegrationTest {
         // instalado há 30, vistoria pedida há 25 (5 dias) e aprovada há 20 (ciclo de 40 dias).
         Integer clienteA = criarCliente("Cliente A", 70);
         Integer projetoA = criarProjeto(clienteA, iso(60));
+        consultarDebito(clienteA, "HOMOLOGACAO", "QUITADO");
         acao("/api/projetos/%d/encaminhar".formatted(projetoA),
                 """
                         {"dataEncaminhado": "%s"}""".formatted(iso(50)));
@@ -113,6 +114,7 @@ class DashboardHttpTest extends AbstractIntegrationTest {
         // Projeto B: recebido há 30, enviado há 10 (20 dias) e reprovado. Sem aprovação.
         Integer clienteB = criarCliente("Cliente B", 35);
         Integer projetoB = criarProjeto(clienteB, iso(30));
+        consultarDebito(clienteB, "HOMOLOGACAO", "QUITADO");
         acao("/api/projetos/%d/encaminhar".formatted(projetoB),
                 """
                         {"dataEncaminhado": "%s"}""".formatted(iso(10)));
@@ -120,14 +122,20 @@ class DashboardHttpTest extends AbstractIntegrationTest {
                 """
                         {"motivo": "Faltou ART"}""");
 
-        // Cliente C: só débito ativo, para o contador de travados.
+        // Cliente C: travado nas duas etapas ao mesmo tempo. Conta como UM cliente travado —
+        // é o que o DISTINCT do repositório garante agora que há uma linha de débito por tipo.
         Integer clienteC = criarCliente("Cliente C", 20);
+        consultarDebito(clienteC, "HOMOLOGACAO", "ATIVO");
+        consultarDebito(clienteC, "PENDENCIA", "ATIVO");
+    }
+
+    private void consultarDebito(Integer clienteId, String tipo, String status) throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .put("/api/debitos/cliente/" + clienteC)
+                .put("/api/debitos/cliente/" + clienteId)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenGestor)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"status": "ATIVO"}"""))
+                        {"tipo": "%s", "status": "%s"}""".formatted(tipo, status)))
                 .andExpect(status().isOk());
     }
 
@@ -188,7 +196,7 @@ class DashboardHttpTest extends AbstractIntegrationTest {
 
     private Integer criarProjeto(Integer clienteId, String dataRecebimento) throws Exception {
         String corpo = postAutenticado("/api/projetos", """
-                {"clienteId": %d, "tipoProjeto": "PADRAO", "dataRecebimento": "%s"}"""
+                {"clienteId": %d, "tipoProjeto": "PROJETO_INICIAL", "dataRecebimento": "%s"}"""
                 .formatted(clienteId, dataRecebimento))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
@@ -213,12 +221,16 @@ class DashboardHttpTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.quantitativos.projetosAprovados").value(1))
                 .andExpect(jsonPath("$.quantitativos.projetosReprovados").value(1))
                 .andExpect(jsonPath("$.quantitativos.vistoriasSolicitadas").value(1))
+                // Cliente C está travado nas duas etapas, mas é um cliente só.
                 .andExpect(jsonPath("$.quantitativos.clientesComDebitoAtivo").value(1))
+                .andExpect(jsonPath("$.quantitativos.clientesTravadosNaPendencia").value(1))
+                .andExpect(jsonPath("$.quantitativos.clientesTravadosNaHomologacao").value(1))
                 // Contadores que o protótipo do frontend já mostrava e a API passou a devolver.
                 .andExpect(jsonPath("$.quantitativos.vistoriasAprovadas").value(1))
                 .andExpect(jsonPath("$.quantitativos.vistoriasReprovadas").value(0))
                 .andExpect(jsonPath("$.quantitativos.projetosReencaminhados").value(0))
-                .andExpect(jsonPath("$.quantitativos.clientesComDebitoQuitado").value(0))
+                // A e B tiveram a consulta de homologação registrada como quitada.
+                .andExpect(jsonPath("$.quantitativos.clientesComDebitoQuitado").value(2))
                 .andExpect(jsonPath("$.quantitativos.unificacoesPendentes").value(0))
                 .andExpect(jsonPath("$.quantitativos.pendenciasAbertasNoPeriodo").value(0));
     }
@@ -253,16 +265,76 @@ class DashboardHttpTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void analistaNaoVeODashboard() throws Exception {
+    void analistaVeODashboard() throws Exception {
+        // Decisão do usuário (09/09/2026): o dashboard deixou de ser exclusivo do gestor. O
+        // teste continua existindo virado do avesso porque a pergunta "quem alcança o
+        // dashboard" tem de ficar respondida por um teste, e não pela ausência de um.
         mvc.perform(get("/api/dashboard")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAnalista))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.codigo").value("ACESSO_NEGADO"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantitativos.projetosEncaminhados").value(2));
     }
 
     @Test
     void semTokenNaoVeODashboard() throws Exception {
         mvc.perform(get("/api/dashboard"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * O recorte por pessoa cai sobre o responsável de cada etapa — aqui, o analista do projeto.
+     * Os projetos A e B do cenário nasceram sem analista, então só o projeto D entra: é o
+     * comportamento documentado de que linha sem responsável fica de fora do recorte.
+     */
+    @Test
+    void oFiltroPorAnalistaRecortaPeloResponsavelDaEtapa() throws Exception {
+        Integer clienteD = criarCliente("Cliente D", 25);
+        Integer projetoD = criarProjetoComAnalista(clienteD, iso(20), analistaId);
+        consultarDebito(clienteD, "HOMOLOGACAO", "QUITADO");
+        acao("/api/projetos/%d/encaminhar".formatted(projetoD),
+                """
+                        {"dataEncaminhado": "%s"}""".formatted(iso(15)));
+
+        // Sem filtro, os três envios do cenário.
+        mvc.perform(get("/api/dashboard")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenGestor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.filtro.analistaId").doesNotExist())
+                .andExpect(jsonPath("$.quantitativos.projetosEncaminhados").value(3));
+
+        // Com filtro, só o que passou pelas mãos dela.
+        mvc.perform(get("/api/dashboard")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenGestor)
+                .param("analistaId", String.valueOf(analistaId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.filtro.analistaId").value(analistaId))
+                .andExpect(jsonPath("$.filtro.analistaNome").value("Ana Analista"))
+                .andExpect(jsonPath("$.quantitativos.projetosEncaminhados").value(1))
+                // Quem consultou os débitos do cenário foi o gestor, não ela.
+                .andExpect(jsonPath("$.quantitativos.clientesComDebitoAtivo").value(0));
+    }
+
+    /**
+     * Zerar tudo em silêncio seria indistinguível de "esse analista não fez nada no período",
+     * que é uma resposta legítima — então o id inexistente precisa falhar alto.
+     */
+    @Test
+    void analistaInexistenteDevolve404() throws Exception {
+        mvc.perform(get("/api/dashboard")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenGestor)
+                .param("analistaId", "999999"))
+                .andExpect(status().isNotFound());
+    }
+
+    private Integer criarProjetoComAnalista(Integer clienteId, String dataRecebimento,
+            Long analista) throws Exception {
+
+        String corpo = postAutenticado("/api/projetos", """
+                {"clienteId": %d, "tipoProjeto": "PROJETO_INICIAL", "dataRecebimento": "%s", \
+                "analistaResponsavelId": %d}"""
+                .formatted(clienteId, dataRecebimento, analista))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(corpo, "$.id");
     }
 }

@@ -13,10 +13,10 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Define a senha do administrador semeado a partir de uma variável de ambiente, uma única vez.
  * <p>
- * Existe por dois motivos concretos: o admin da migration V3 nasce com {@code senha_hash} nulo
- * (o acesso previsto é pelo Google Workspace), então <b>sem isto não há como entrar no sistema
- * enquanto o login Google não estiver configurado</b> — nem em desenvolvimento, nem no primeiro
- * deploy. E serve de conta break-glass se o Google ficar indisponível.
+ * Existe porque o admin da migration V3 nasce com {@code senha_hash} nulo e <b>não há outro
+ * caminho de entrada</b>: o cadastro de usuários exige alguém já autenticado, e não existe
+ * auto-cadastro nem login federado. Sem isto, o sistema subiria sem ninguém conseguir entrar —
+ * nem em desenvolvimento, nem no primeiro deploy.
  * <p>
  * Só age quando a senha ainda é nula: nunca sobrescreve uma senha já definida, então deixar a
  * variável no ambiente não vira um reset silencioso a cada restart. A senha vem do ambiente,

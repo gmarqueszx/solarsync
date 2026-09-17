@@ -28,7 +28,6 @@ class OpenApiContratoTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme")
                         .value("bearer"))
                 .andExpect(jsonPath("$.paths['/api/auth/login']").exists())
-                .andExpect(jsonPath("$.paths['/api/auth/login/google']").exists())
                 .andExpect(jsonPath("$.paths['/api/pendencias']").exists())
                 .andExpect(jsonPath("$.paths['/api/pendencias/{id}/resolver']").exists())
                 .andExpect(jsonPath("$.paths['/api/projetos/{id}/reprovar']").exists())

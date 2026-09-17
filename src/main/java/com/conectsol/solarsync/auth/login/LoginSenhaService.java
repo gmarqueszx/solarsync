@@ -18,8 +18,8 @@ import com.conectsol.solarsync.common.exception.CredenciaisInvalidasException;
 /**
  * Login por e-mail e senha.
  * <p>
- * Todos os motivos de falha — usuário inexistente, sem senha cadastrada (só entra pelo
- * Google), inativo, ou senha errada — devolvem a <b>mesma</b> exceção genérica. Diferenciar
+ * Todos os motivos de falha — usuário inexistente, sem senha definida, inativo, ou senha
+ * errada — devolvem a <b>mesma</b> exceção genérica. Diferenciar
  * permitiria a um atacante enumerar quem tem conta. O motivo real vai para o log.
  */
 @Service
@@ -60,7 +60,7 @@ public class LoginSenhaService {
             throw new CredenciaisInvalidasException();
         }
         if (usuario.getSenhaHash() == null) {
-            log.warn("Login recusado: usuário sem senha cadastrada, entra só pelo Google ({})",
+            log.warn("Login recusado: usuário sem senha definida; peça ao gestor para definir ({})",
                     emailNormalizado);
             throw new CredenciaisInvalidasException();
         }

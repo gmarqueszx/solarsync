@@ -34,27 +34,55 @@ class DebitoRepositoryTest {
 
         Debito debito = Debito.builder()
                 .cliente(cliente)
+                .tipo(TipoDebito.HOMOLOGACAO)
                 .status(StatusDebito.ATIVO)
                 .ultimaConsultaEm(Instant.now())
+                .detectadoEm(Instant.now())
                 .build();
 
         debitoRepository.save(debito);
         entityManager.flush();
         entityManager.clear();
 
-        Debito encontrado = debitoRepository.findByClienteId(cliente.getId()).orElseThrow();
+        Debito encontrado = debitoRepository
+                .findByClienteIdAndTipo(cliente.getId(), TipoDebito.HOMOLOGACAO).orElseThrow();
         assertThat(encontrado.getStatus()).isEqualTo(StatusDebito.ATIVO);
     }
 
     @Test
-    void rejeitaDoisDebitosParaOMesmoCliente() {
+    void rejeitaDoisDebitosDoMesmoTipoParaOMesmoCliente() {
         Cliente cliente = novoCliente();
-        debitoRepository.save(Debito.builder().cliente(cliente).status(StatusDebito.ATIVO).build());
+        debitoRepository.save(Debito.builder().cliente(cliente).tipo(TipoDebito.PENDENCIA)
+                .status(StatusDebito.ATIVO).build());
         entityManager.flush();
 
         assertThatThrownBy(() -> {
-            debitoRepository.save(Debito.builder().cliente(cliente).status(StatusDebito.QUITADO).build());
+            debitoRepository.save(Debito.builder().cliente(cliente).tipo(TipoDebito.PENDENCIA)
+                    .status(StatusDebito.QUITADO).build());
             entityManager.flush();
         }).isInstanceOf(DataAccessException.class);
+    }
+
+    /**
+     * Os dois tipos convivem: o débito que trava a pendência e o que trava a homologação são
+     * consultas diferentes, e o cliente pode estar quitado numa e devendo na outra. É esta
+     * coexistência que a tela de débitos precisa mostrar.
+     */
+    @Test
+    void aceitaOsDoisTiposParaOMesmoCliente() {
+        Cliente cliente = novoCliente();
+
+        debitoRepository.save(Debito.builder().cliente(cliente).tipo(TipoDebito.PENDENCIA)
+                .status(StatusDebito.QUITADO).build());
+        debitoRepository.save(Debito.builder().cliente(cliente).tipo(TipoDebito.HOMOLOGACAO)
+                .status(StatusDebito.ATIVO).build());
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(debitoRepository.findByClienteId(cliente.getId())).hasSize(2);
+        assertThat(debitoRepository.existsByClienteIdAndTipoAndStatus(
+                cliente.getId(), TipoDebito.HOMOLOGACAO, StatusDebito.ATIVO)).isTrue();
+        assertThat(debitoRepository.existsByClienteIdAndTipoAndStatus(
+                cliente.getId(), TipoDebito.PENDENCIA, StatusDebito.ATIVO)).isFalse();
     }
 }

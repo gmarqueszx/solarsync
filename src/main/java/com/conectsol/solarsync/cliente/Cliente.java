@@ -6,6 +6,8 @@ import com.conectsol.solarsync.common.BaseEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
@@ -45,4 +47,18 @@ public class Cliente extends BaseEntity {
 
     @Column(name = "telefone", length = 20)
     private String telefone;
+
+    /**
+     * Resultado da checagem de pendência na Coelba. Fica no Cliente, e não numa entidade
+     * própria, porque é o retrato da situação atual dele — mesma escolha feita para
+     * {@code Debito} (um registro por cliente); o vai-e-vem fica em {@code historico_status}.
+     * <p>
+     * O {@code @Builder.Default} é o que garante o valor inicial: Lombok move o inicializador
+     * para o builder, então quem construir por {@code new Cliente()} recebe null — só o
+     * Hibernate faz isso, e logo em seguida preenche o campo com o valor da linha.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_triagem", nullable = false, length = 30)
+    @Builder.Default
+    private StatusTriagem statusTriagem = StatusTriagem.AGUARDANDO_VERIFICACAO;
 }

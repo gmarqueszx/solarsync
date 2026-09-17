@@ -50,7 +50,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
                                 "/api/auth/login",
-                                "/api/auth/login/google",
                                 "/api/auth/refresh").permitAll()
                         .requestMatchers(
                                 "/v3/api-docs/**",

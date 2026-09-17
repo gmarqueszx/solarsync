@@ -17,8 +17,8 @@ import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.common.exception.UsuarioNaoAutorizadoException;
 
 /**
- * Único emissor de token do sistema. Os dois fluxos de login (senha e Google) diferem apenas
- * em como provam a identidade; ambos terminam em {@link #emitirPar(Usuario)}.
+ * Único emissor de token do sistema: o login por senha e a renovação por refresh token diferem
+ * apenas em como provam a identidade, e ambos terminam em {@link #emitirPar(Usuario)}.
  */
 @Service
 public class TokenService {

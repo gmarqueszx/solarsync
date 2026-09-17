@@ -3,6 +3,7 @@ package com.conectsol.solarsync;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,6 +25,7 @@ import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.auth.UsuarioRepository;
 import com.conectsol.solarsync.cliente.ClienteRepository;
 import com.conectsol.solarsync.common.AbstractIntegrationTest;
+import com.conectsol.solarsync.debito.DebitoRepository;
 import com.conectsol.solarsync.historico.HistoricoStatusRepository;
 import com.conectsol.solarsync.pendencia.PendenciaRepository;
 import com.conectsol.solarsync.projeto.ProjetoRepository;
@@ -67,6 +69,9 @@ class FluxoPendenciaProjetoHttpTest extends AbstractIntegrationTest {
     @Autowired
     private HistoricoStatusRepository historicoStatusRepository;
 
+    @Autowired
+    private DebitoRepository debitoRepository;
+
     private Long usuarioCriadoId;
 
     @BeforeEach
@@ -86,6 +91,10 @@ class FluxoPendenciaProjetoHttpTest extends AbstractIntegrationTest {
         historicoStatusRepository.deleteAll();
         projetoRepository.deleteAll();
         pendenciaRepository.deleteAll();
+        // Desde que resolver pendência exige consulta de débito, este teste cria uma linha em
+        // `debito`; sem apagá-la, o `clienteRepository.deleteAll()` abaixo falha por FK — e o
+        // estrago aparece no teste seguinte que apaga clientes, não neste.
+        debitoRepository.deleteAll();
         if (usuarioCriadoId != null) {
             usuarioRepository.deleteById(usuarioCriadoId);
             usuarioCriadoId = null;
@@ -133,6 +142,21 @@ class FluxoPendenciaProjetoHttpTest extends AbstractIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         Integer pendenciaId = JsonPath.read(pendenciaJson, "$.id");
 
+        // 2b. Resolver antes de consultar o débito é recusado: a analista precisa saber se o
+        //     cliente deve, e a ausência de consulta não é "não deve", é "ninguém olhou".
+        mvc.perform(post("/api/pendencias/%d/resolver".formatted(pendenciaId))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("DEBITO_NAO_CONSULTADO"));
+
+        // 2c. Registra a consulta na agência virtual: sem débito de pendência, libera a resolução.
+        mvc.perform(put("/api/debitos/cliente/%d".formatted(clienteId))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"tipo": "PENDENCIA", "status": "QUITADO"}"""))
+                .andExpect(status().isOk());
+
         // 3. Resolve — é aqui que a automação entre etapas deve disparar
         mvc.perform(post("/api/pendencias/%d/resolver".formatted(pendenciaId))
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
@@ -150,7 +174,7 @@ class FluxoPendenciaProjetoHttpTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElementos").value(1))
                 .andExpect(jsonPath("$.conteudo[0].status").value("RECEBIDO"))
-                .andExpect(jsonPath("$.conteudo[0].tipoProjeto").value("PADRAO"))
+                .andExpect(jsonPath("$.conteudo[0].tipoProjeto").value("PROJETO_INICIAL"))
                 .andExpect(jsonPath("$.conteudo[0].clienteNome").value("Cliente do Fluxo"));
 
         // 5. E a auditoria registrou as duas transições da pendência
@@ -225,20 +249,40 @@ class FluxoPendenciaProjetoHttpTest extends AbstractIntegrationTest {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"clienteId": %d, "tipoProjeto": "PADRAO"}""".formatted(clienteId)))
+                        {"clienteId": %d, "tipoProjeto": "PROJETO_INICIAL"}""".formatted(clienteId)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         Integer projetoId = JsonPath.read(projetoJson, "$.id");
+
+        // Encaminhar exige a consulta de débito de homologação — é o passo do projetista ao
+        // receber o cliente, e é o que impede o projeto de ir à Coelba sem ninguém ter olhado.
+        mvc.perform(put("/api/debitos/cliente/%d".formatted(clienteId))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"tipo": "HOMOLOGACAO", "status": "QUITADO"}"""))
+                .andExpect(status().isOk());
 
         mvc.perform(post("/api/projetos/%d/encaminhar".formatted(projetoId))
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"dataArt": "2026-08-20", "dataEncaminhado": "2026-08-25"}"""))
+                        {"dataArt": "2026-08-20", "dataEncaminhado": "2026-08-25",
+                         "numeroSolicitacao": "2026-COE-551234"}"""))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ENCAMINHADO"))
                 .andExpect(jsonPath("$.dataEncaminhado").value("2026-08-25"))
-                .andExpect(jsonPath("$.dataArt").value("2026-08-20"));
+                .andExpect(jsonPath("$.dataArt").value("2026-08-20"))
+                .andExpect(jsonPath("$.numeroSolicitacao").value("2026-COE-551234"));
+
+        // O número é a chave de busca do retorno da Coelba: é por ele que o analista acha o
+        // projeto quando o e-mail chega, e é o que a automação futura vai casar.
+        mvc.perform(get("/api/projetos")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .param("q", "551234"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElementos").value(1))
+                .andExpect(jsonPath("$.conteudo[0].id").value(projetoId));
 
         mvc.perform(post("/api/projetos/%d/aprovar".formatted(projetoId))
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))

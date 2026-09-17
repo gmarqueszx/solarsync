@@ -8,24 +8,23 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.conectsol.solarsync.common.security.SomenteGestor;
+import com.conectsol.solarsync.common.security.PodeLer;
 import com.conectsol.solarsync.dashboard.dto.DashboardResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
-@Tag(name = "Dashboard", description = "Métricas gerenciais — restrito a GESTOR e ADMINISTRADOR")
+@Tag(name = "Dashboard", description = "Métricas de tempo de ciclo e quantitativos do fluxo")
 public class DashboardController {
 
     private final DashboardService dashboardService;
 
     @GetMapping
-    @SomenteGestor
+    @PodeLer
     @Operation(
             summary = "Métricas de tempo de ciclo e quantitativos do período",
             description = """
@@ -39,14 +38,18 @@ public class DashboardController {
                     clientesComDebitoAtivo, que é a situação de agora — quantos clientes estão \
                     travados neste momento.
 
-                    Sem de/ate, considera todo o histórico.""")
-    @ApiResponse(responseCode = "403", description = "ANALISTA não tem acesso ao dashboard")
+                    Sem de/ate, considera todo o histórico.
+
+                    analistaId recorta tudo pelo responsável da etapa — que é uma coluna \
+                    diferente em cada uma (responsável da pendência, analista do projeto, quem \
+                    consultou o débito, projetista da unificação). Sem ele, a equipe inteira.""")
     public DashboardResponse metricas(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
             LocalDate de,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-            LocalDate ate) {
+            LocalDate ate,
+            @RequestParam(required = false) Long analistaId) {
 
-        return dashboardService.metricas(de, ate);
+        return dashboardService.metricas(de, ate, analistaId);
     }
 }

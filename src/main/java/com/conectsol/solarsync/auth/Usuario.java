@@ -41,8 +41,8 @@ public class Usuario extends BaseEntity {
 
     /**
      * Normaliza na escrita para casar com o índice único funcional em {@code lower(email)}
-     * (migration V4). Sem isso, um usuário cadastrado como {@code Joao@conectsol.com} nunca
-     * conseguiria entrar pelo Google, que devolve o e-mail sempre em minúsculas.
+     * (migration V4). Sem isso, {@code Joao@conectsol.com} e {@code joao@conectsol.com} seriam
+     * duas contas, e quem digitasse o e-mail com outra caixa não acharia a própria.
      * <p>
      * Escrito à mão de propósito: o Lombok não gera o setter quando ele já existe, então não
      * há caminho de escrita que escape da normalização.

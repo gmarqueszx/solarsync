@@ -33,10 +33,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Etapa 2 do fluxo. Não há POST: o débito é identificado pelo cliente (um por cliente), então
- * registrar uma consulta é um {@code PUT} idempotente em
- * {@code /api/debitos/cliente/{clienteId}} — consultar de novo atualiza o mesmo registro em vez
- * de criar linhas soltas.
+ * Etapa 2 do fluxo. Não há POST: o débito é identificado pelo par cliente + tipo (um registro
+ * por combinação), então registrar uma consulta é um {@code PUT} idempotente em
+ * {@code /api/debitos/cliente/{clienteId}} com o tipo no corpo — consultar de novo atualiza o
+ * mesmo registro em vez de criar linhas soltas.
  */
 @RestController
 @RequestMapping("/api/debitos")
@@ -51,8 +51,10 @@ public class DebitoController {
     @PodeLer
     @Operation(
             summary = "Lista as situações de débito conhecidas",
-            description = "Filtre por status=ATIVO para ver quem está travado, ou use "
-                    + "consultadoAntesDe para achar consultas velhas que valem refazer.")
+            description = "Filtre por tipo=PENDENCIA/HOMOLOGACAO para ver o que está travando "
+                    + "cada etapa, por status=ATIVO para ver quem está travado, por "
+                    + "paradoHaMaisDeDias para a fila do financeiro, ou use consultadoAntesDe "
+                    + "para achar consultas velhas que valem refazer.")
     public PaginaResponse<DebitoResponse> listar(
             @Valid DebitoFiltro filtro,
             @PageableDefault(size = 20, sort = "ultimaConsultaEm", direction = Sort.Direction.DESC)
@@ -63,18 +65,25 @@ public class DebitoController {
 
     @GetMapping("/cliente/{clienteId}")
     @PodeLer
-    @Operation(summary = "Situação de débito de um cliente")
-    public DebitoResponse buscarPorCliente(@PathVariable Long clienteId) {
-        return DebitoResponse.de(debitoService.buscarPorCliente(clienteId));
+    @Operation(
+            summary = "Situações de débito de um cliente",
+            description = "Até dois registros: o débito que trava a pendência e o que trava a "
+                    + "homologação. Lista vazia significa que ninguém consultou este cliente "
+                    + "ainda — que é diferente de não dever nada.")
+    public List<DebitoResponse> buscarPorCliente(@PathVariable Long clienteId) {
+        return debitoService.listarPorCliente(clienteId).stream()
+                .map(DebitoResponse::de)
+                .toList();
     }
 
     @PutMapping("/cliente/{clienteId}")
     @PodeEscrever
     @Operation(
             summary = "Registra o resultado da consulta de débito",
-            description = "Enquanto o status for ATIVO, encaminhar o projeto do cliente à Coelba "
-                    + "é bloqueado com 409. Reconsultar e achar a mesma situação só atualiza a "
-                    + "data, sem gerar linha nova de histórico.")
+            description = "O tipo diz que etapa esta consulta responde. Com PENDENCIA ativo, "
+                    + "resolver a pendência é bloqueado com 409; com HOMOLOGACAO ativo, "
+                    + "encaminhar o projeto à Coelba é bloqueado com 409. Reconsultar e achar a "
+                    + "mesma situação só atualiza a data, sem gerar linha nova de histórico.")
     public DebitoResponse registrarConsulta(@PathVariable Long clienteId,
             @RequestBody @Valid DebitoRegistrarRequest requisicao,
             @Autenticado UsuarioAutenticado usuario) {

@@ -101,7 +101,7 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
         clienteId = JsonPath.read(cliente, "$.id");
 
         String projeto = requisicaoAutenticada(post("/api/projetos"), """
-                {"clienteId": %d, "tipoProjeto": "PADRAO"}""".formatted(clienteId))
+                {"clienteId": %d, "tipoProjeto": "PROJETO_INICIAL"}""".formatted(clienteId))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         projetoId = JsonPath.read(projeto, "$.id");
@@ -132,15 +132,25 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
 
     @Test
     void debitoAtivoBloqueiaOEnvioEQuitarLibera() throws Exception {
-        // Sem consulta registrada, cliente novo não fica travado.
-        assertThat(debitoRepository.findByClienteId(Long.valueOf(clienteId))).isEmpty();
+        assertThat(debitoRepository.findByClienteIdAndTipo(
+                Long.valueOf(clienteId), TipoDebito.HOMOLOGACAO)).isEmpty();
+
+        // Sem consulta de homologação registrada, encaminhar é recusado: ninguém olhou se este
+        // cliente deve, e "não olhou" não é "não deve".
+        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), "{}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("DEBITO_NAO_CONSULTADO"));
 
         requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
-                {"status": "ATIVO"}""")
+                {"tipo": "HOMOLOGACAO", "status": "ATIVO"}""")
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo").value("HOMOLOGACAO"))
                 .andExpect(jsonPath("$.status").value("ATIVO"))
                 .andExpect(jsonPath("$.cliente.nome").value("Cliente Devedor"))
-                .andExpect(jsonPath("$.ultimaConsultaEm").isNotEmpty());
+                .andExpect(jsonPath("$.ultimaConsultaEm").isNotEmpty())
+                .andExpect(jsonPath("$.detectadoEm").isNotEmpty())
+                .andExpect(jsonPath("$.diasParado").value(0))
+                .andExpect(jsonPath("$.consultadoPor.id").value(usuarioCriadoId.intValue()));
 
         // O projeto continua existindo e visível — o cliente travado não desaparece da tela.
         mvc.perform(get("/api/projetos/" + projetoId)
@@ -153,26 +163,75 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.codigo").value("CLIENTE_COM_DEBITO"));
 
         requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
-                {"status": "QUITADO"}""")
+                {"tipo": "HOMOLOGACAO", "status": "QUITADO"}""")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("QUITADO"));
+                .andExpect(jsonPath("$.status").value("QUITADO"))
+                .andExpect(jsonPath("$.quitadoEm").isNotEmpty())
+                // Quitado não está parando ninguém: nulo, e não zero.
+                .andExpect(jsonPath("$.diasParado").doesNotExist());
 
-        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), "{}")
+        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), """
+                {"numeroSolicitacao": "2026-COE-777001"}""")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ENCAMINHADO"))
-                .andExpect(jsonPath("$.dataEncaminhado").isNotEmpty());
+                .andExpect(jsonPath("$.dataEncaminhado").isNotEmpty())
+                .andExpect(jsonPath("$.numeroSolicitacao").value("2026-COE-777001"));
+    }
+
+    /**
+     * O ponto do modelo de dois tipos: um débito que trava a pendência não pode travar o envio
+     * do projeto, e vice-versa. Antes havia um registro só, então quitar para uma etapa
+     * destravava a outra sem ninguém ter olhado.
+     */
+    @Test
+    void debitoDePendenciaNaoBloqueiaOEnvioDoProjeto() throws Exception {
+        requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
+                {"tipo": "PENDENCIA", "status": "ATIVO"}""")
+                .andExpect(status().isOk());
+
+        // Continua faltando a consulta de homologação — a de pendência não responde por ela.
+        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), "{}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("DEBITO_NAO_CONSULTADO"));
+
+        requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
+                {"tipo": "HOMOLOGACAO", "status": "QUITADO"}""")
+                .andExpect(status().isOk());
+
+        // Com a homologação quitada o envio passa, ainda que a pendência siga travada.
+        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ENCAMINHADO"));
+    }
+
+    /** As duas situações do cliente numa consulta só, que é o que a tela de detalhe mostra. */
+    @Test
+    void buscarPorClienteDevolveOsDoisTipos() throws Exception {
+        requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
+                {"tipo": "PENDENCIA", "status": "QUITADO"}""")
+                .andExpect(status().isOk());
+        requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
+                {"tipo": "HOMOLOGACAO", "status": "ATIVO"}""")
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/api/debitos/cliente/" + clienteId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].tipo").value("PENDENCIA"))
+                .andExpect(jsonPath("$[1].tipo").value("HOMOLOGACAO"));
     }
 
     @Test
     void historicoDoDebitoPermiteMedirOTempoParado() throws Exception {
         String debito = requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
-                {"status": "ATIVO"}""")
+                {"tipo": "HOMOLOGACAO", "status": "ATIVO"}""")
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         Integer debitoId = JsonPath.read(debito, "$.id");
 
         requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
-                {"status": "QUITADO"}""")
+                {"tipo": "HOMOLOGACAO", "status": "QUITADO"}""")
                 .andExpect(status().isOk());
 
         // As duas pontas que a métrica "tempo médio parado por débito" subtrai.
@@ -191,16 +250,20 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
     @Test
     void reconsultarAMesmaSituacaoAtualizaADataSemPoluirOHistorico() throws Exception {
         String primeira = requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
-                {"status": "ATIVO", "consultadoEm": "2026-08-01T10:00:00Z"}""")
+                {"tipo": "HOMOLOGACAO", "status": "ATIVO",
+                 "consultadoEm": "2026-08-01T10:00:00Z"}""")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ultimaConsultaEm").value("2026-08-01T10:00:00Z"))
                 .andReturn().getResponse().getContentAsString();
         Integer debitoId = JsonPath.read(primeira, "$.id");
 
         requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
-                {"status": "ATIVO", "consultadoEm": "2026-08-20T10:00:00Z"}""")
+                {"tipo": "HOMOLOGACAO", "status": "ATIVO",
+                 "consultadoEm": "2026-08-20T10:00:00Z"}""")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.ultimaConsultaEm").value("2026-08-20T10:00:00Z"));
+                .andExpect(jsonPath("$.ultimaConsultaEm").value("2026-08-20T10:00:00Z"))
+                // Reconsultar não reinicia o relógio: o cliente está parado desde a detecção.
+                .andExpect(jsonPath("$.detectadoEm").value("2026-08-01T10:00:00Z"));
 
         // Uma linha só: senão o tempo parado por débito seria recontado a cada consulta.
         mvc.perform(get("/api/debitos/%d/historico".formatted(debitoId))
@@ -210,9 +273,12 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void listagemFiltraQuemEstaTravadoPorDebito() throws Exception {
+    void listagemFiltraQuemEstaTravadoPorDebitoEPorEtapa() throws Exception {
         requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
-                {"status": "ATIVO"}""")
+                {"tipo": "HOMOLOGACAO", "status": "ATIVO"}""")
+                .andExpect(status().isOk());
+        requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
+                {"tipo": "PENDENCIA", "status": "QUITADO"}""")
                 .andExpect(status().isOk());
 
         mvc.perform(get("/api/debitos")
@@ -222,9 +288,25 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.totalElementos").value(1))
                 .andExpect(jsonPath("$.conteudo[0].cliente.nome").value("Cliente Devedor"));
 
+        // As duas abas da tela: cada uma responde por uma etapa do fluxo.
         mvc.perform(get("/api/debitos")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
-                .param("status", "QUITADO"))
+                .param("tipo", "PENDENCIA")
+                .param("status", "ATIVO"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElementos").value(0));
+
+        mvc.perform(get("/api/debitos")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .param("tipo", "HOMOLOGACAO")
+                .param("status", "ATIVO"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElementos").value(1));
+
+        // Fila do financeiro: recém-detectado não entra no recorte de "parado há tempo demais".
+        mvc.perform(get("/api/debitos")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .param("paradoHaMaisDeDias", "15"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElementos").value(0));
     }
@@ -232,7 +314,7 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
     @Test
     void analistaNaoPodeExcluirRegistroDeDebito() throws Exception {
         String debito = requisicaoAutenticada(put("/api/debitos/cliente/" + clienteId), """
-                {"status": "ATIVO"}""")
+                {"tipo": "HOMOLOGACAO", "status": "ATIVO"}""")
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         Integer debitoId = JsonPath.read(debito, "$.id");

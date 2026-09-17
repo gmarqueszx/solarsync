@@ -53,6 +53,15 @@ public class Projeto extends BaseEntity {
     @Column(name = "data_encaminhado")
     private LocalDate dataEncaminhado;
 
+    /**
+     * Número que a Coelba devolve ao receber o projeto. É a chave que liga este registro ao
+     * e-mail diário de status — sem ela a leitura automática do e-mail teria de casar por nome
+     * de cliente, que é ambíguo. Sem UNIQUE: projeto reenviado pode receber outro número, e a
+     * importação da planilha traz o campo irregular.
+     */
+    @Column(name = "numero_solicitacao", length = 50)
+    private String numeroSolicitacao;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

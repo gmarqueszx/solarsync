@@ -107,11 +107,11 @@ class LoginSenhaServiceTest {
     }
 
     @Test
-    void recusaUsuarioSemSenhaCadastradaSemRevelarQueEleSoEntraPeloGoogle() {
-        Usuario soGoogle = usuarioComSenha();
-        soGoogle.setSenhaHash(null);
+    void recusaUsuarioSemSenhaDefinidaSemRevelarQueEleNaoTemSenha() {
+        Usuario semSenha = usuarioComSenha();
+        semSenha.setSenhaHash(null);
         when(usuarioRepository.findByEmail("larissa@conectsol.com"))
-                .thenReturn(Optional.of(soGoogle));
+                .thenReturn(Optional.of(semSenha));
 
         assertThatThrownBy(() -> servico.autenticar("larissa@conectsol.com", SENHA_CORRETA))
                 .isInstanceOf(CredenciaisInvalidasException.class)

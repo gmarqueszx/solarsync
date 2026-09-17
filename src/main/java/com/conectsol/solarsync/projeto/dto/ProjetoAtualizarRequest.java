@@ -7,6 +7,7 @@ import com.conectsol.solarsync.projeto.TipoProjeto;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 /** <b>Sem campo status</b>: transições só pelos endpoints de ação. */
 public record ProjetoAtualizarRequest(
@@ -14,5 +15,6 @@ public record ProjetoAtualizarRequest(
         Long analistaResponsavelId,
         LocalDate dataRecebimento,
         LocalDate dataArt,
+        @Size(max = 50) String numeroSolicitacao,
         @PositiveOrZero BigDecimal potenciaKwp) {
 }

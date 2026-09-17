@@ -5,7 +5,16 @@ import java.util.List;
 
 import org.springframework.data.jpa.domain.Specification;
 
+import com.conectsol.solarsync.debito.Debito;
+import com.conectsol.solarsync.debito.StatusDebito;
+import com.conectsol.solarsync.debito.TipoDebito;
 import com.conectsol.solarsync.projeto.dto.ProjetoFiltro;
+
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 
 final class ProjetoSpecs {
 
@@ -35,9 +44,13 @@ final class ProjetoSpecs {
                     raiz.get("analistaResponsavel").get("id"), filtro.analistaResponsavelId()));
         }
         if (filtro.q() != null && !filtro.q().isBlank()) {
+            // Nome, UC ou número de solicitação: quando o retorno da Coelba chega, o analista
+            // tem em mãos o número, não o nome — e é por ele que precisa achar o projeto.
             String padrao = "%" + filtro.q().trim().toLowerCase() + "%";
-            filtros.add((raiz, consulta, cb) ->
-                    cb.like(cb.lower(raiz.get("cliente").get("nome")), padrao));
+            filtros.add((raiz, consulta, cb) -> cb.or(
+                    cb.like(cb.lower(raiz.get("cliente").get("nome")), padrao),
+                    cb.like(cb.lower(raiz.get("cliente").get("ucCoelba")), padrao),
+                    cb.like(cb.lower(raiz.get("numeroSolicitacao")), padrao)));
         }
         if (filtro.recebidoDe() != null) {
             filtros.add((raiz, consulta, cb) ->
@@ -67,6 +80,41 @@ final class ProjetoSpecs {
             });
         }
 
+        if (Boolean.TRUE.equals(filtro.travadoPorDebito())) {
+            // Travado = ainda por enviar E cliente com débito de homologação ativo. Sem o
+            // recorte de status a fila incluiria projeto já enviado ou aprovado, que o débito
+            // não trava mais.
+            filtros.add((raiz, consulta, cb) -> cb.and(
+                    raiz.get("status").in(StatusProjeto.RECEBIDO, StatusProjeto.AGUARDANDO_ENVIO,
+                            StatusProjeto.REPROVADO),
+                    cb.exists(debitoDeHomologacao(raiz, consulta, cb, StatusDebito.ATIVO))));
+        }
+        if (Boolean.TRUE.equals(filtro.semConsultaDebito())) {
+            filtros.add((raiz, consulta, cb) -> cb.and(
+                    raiz.get("status").in(StatusProjeto.RECEBIDO, StatusProjeto.AGUARDANDO_ENVIO,
+                            StatusProjeto.REPROVADO),
+                    cb.not(cb.exists(debitoDeHomologacao(raiz, consulta, cb, null)))));
+        }
+
         return filtros.isEmpty() ? Specification.unrestricted() : Specification.allOf(filtros);
+    }
+
+    /**
+     * Subconsulta do débito de <b>homologação</b> do cliente do projeto; {@code status} nulo casa
+     * qualquer consulta registrada. Subconsulta em vez de join porque um join multiplicaria a
+     * linha do projeto e o {@code EXISTS} negado (sem consulta) não funcionaria.
+     */
+    private static Subquery<Long> debitoDeHomologacao(Root<Projeto> raiz, CriteriaQuery<?> consulta,
+            CriteriaBuilder cb, StatusDebito status) {
+
+        Subquery<Long> subconsulta = consulta.subquery(Long.class);
+        Root<Debito> debito = subconsulta.from(Debito.class);
+        Predicate mesmoClienteEHomologacao = cb.and(
+                cb.equal(debito.get("cliente").get("id"), raiz.get("cliente").get("id")),
+                cb.equal(debito.get("tipo"), TipoDebito.HOMOLOGACAO));
+
+        return subconsulta.select(debito.get("id")).where(status == null
+                ? mesmoClienteEHomologacao
+                : cb.and(mesmoClienteEHomologacao, cb.equal(debito.get("status"), status)));
     }
 }
