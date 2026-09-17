@@ -31,3 +31,14 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Segredos ###
+# Checklist item 6 do CLAUDE.md: nenhuma credencial no Git. Use .env.example como referência.
+.env
+.env.*
+!.env.example
+*.pem
+
+# Configuração local de desenvolvimento. O Spring Boot lê ./config/application.properties
+# automaticamente (sem profile nem variável de ambiente) e ela sobrepõe a do classpath.
+config/

@@ -1,0 +1,70 @@
+package com.conectsol.solarsync.auth;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Define a senha do administrador semeado a partir de uma variável de ambiente, uma única vez.
+ * <p>
+ * Existe porque o admin da migration V3 nasce com {@code senha_hash} nulo e <b>não há outro
+ * caminho de entrada</b>: o cadastro de usuários exige alguém já autenticado, e não existe
+ * auto-cadastro nem login federado. Sem isto, o sistema subiria sem ninguém conseguir entrar —
+ * nem em desenvolvimento, nem no primeiro deploy.
+ * <p>
+ * Só age quando a senha ainda é nula: nunca sobrescreve uma senha já definida, então deixar a
+ * variável no ambiente não vira um reset silencioso a cada restart. A senha vem do ambiente,
+ * nunca do repositório (checklist item 6 do CLAUDE.md).
+ */
+@Component
+@ConditionalOnProperty("solarsync.admin.senha-inicial")
+public class AdminBootstrap implements ApplicationRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(AdminBootstrap.class);
+
+    private final UsuarioRepository usuarioRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final String email;
+    private final String senhaInicial;
+
+    public AdminBootstrap(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder,
+            @Value("${solarsync.admin.email:joaogabriel@conectsol.com}") String email,
+            @Value("${solarsync.admin.senha-inicial}") String senhaInicial) {
+        this.usuarioRepository = usuarioRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.email = email;
+        this.senhaInicial = senhaInicial;
+    }
+
+    @Override
+    @Transactional
+    public void run(ApplicationArguments argumentos) {
+        usuarioRepository.findByEmail(Usuario.normalizarEmail(email)).ifPresentOrElse(
+                this::definirSenhaSeAusente,
+                () -> log.warn("solarsync.admin.senha-inicial definida, mas não há usuário {}",
+                        email));
+    }
+
+    private void definirSenhaSeAusente(Usuario admin) {
+        if (admin.getSenhaHash() != null) {
+            // Em INFO, e não DEBUG, de propósito: pular em silêncio faz quem configurou uma
+            // senha nova achar que ela vale e levar 401 sem entender o motivo.
+            log.info("Admin {} já tem senha definida; a senha-inicial configurada foi IGNORADA "
+                    + "(esta guarda existe para não resetar senha a cada restart). Para trocar, "
+                    + "use POST /api/usuarios/{}/senha, ou recrie o banco em dev com "
+                    + "'docker compose down -v'.", admin.getEmail(), admin.getId());
+            return;
+        }
+        admin.setSenhaHash(passwordEncoder.encode(senhaInicial));
+        usuarioRepository.save(admin);
+        log.warn("Senha inicial aplicada ao admin {}. Troque-a em POST /api/usuarios/{}/senha "
+                + "e remova SOLARSYNC_ADMIN_SENHA_INICIAL do ambiente.",
+                admin.getEmail(), admin.getId());
+    }
+}
