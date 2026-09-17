@@ -595,7 +595,7 @@ histórico falha com 409. Desative em vez de apagar — é o caminho previsto.
 | `SOLARSYNC_CORS_ORIGENS` | `http://localhost:5173` |
 
 **Dados de exemplo** (`SOLARSYNC_DADOS_DE_EXEMPLO=true`, só em dev): `exemplo/DadosDeExemplo`
-semeia 15 clientes cobrindo todos os estados do fluxo — pendência aberta/em andamento/resolvida/
+semeia 20 clientes cobrindo todos os estados do fluxo — pendência aberta/em andamento/resolvida/
 cancelada, projeto travado por débito, reprovado, reencaminhado, aprovado, instalado sem
 vistoria, ciclo completo com vistoria reprovada e reaprovada, e as duas filas de unificação.
 <p>
