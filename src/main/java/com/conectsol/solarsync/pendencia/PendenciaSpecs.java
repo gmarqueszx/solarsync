@@ -61,12 +61,12 @@ final class PendenciaSpecs {
             // Travada = ainda por resolver E cliente com débito ativo. Sem o recorte de status,
             // a fila incluiria pendência já resolvida ou cancelada, que não trava nada.
             filtros.add((raiz, consulta, cb) -> cb.and(
-                    raiz.get("status").in(StatusPendencia.ABERTA, StatusPendencia.EM_ANDAMENTO),
+                    cb.equal(raiz.get("status"), StatusPendencia.ABERTA),
                     cb.exists(debitoDoCliente(raiz, consulta, cb, StatusDebito.ATIVO))));
         }
         if (Boolean.TRUE.equals(filtro.semConsultaDebito())) {
             filtros.add((raiz, consulta, cb) -> cb.and(
-                    raiz.get("status").in(StatusPendencia.ABERTA, StatusPendencia.EM_ANDAMENTO),
+                    cb.equal(raiz.get("status"), StatusPendencia.ABERTA),
                     cb.not(cb.exists(debitoDoCliente(raiz, consulta, cb, null)))));
         }
 

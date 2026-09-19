@@ -16,6 +16,7 @@ import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
 import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
 import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
+import com.conectsol.solarsync.common.exception.NumeroSolicitacaoObrigatorioException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
 import com.conectsol.solarsync.debito.DebitoService;
 import com.conectsol.solarsync.debito.TipoDebito;
@@ -97,7 +98,13 @@ public class ProjetoService {
         projeto.setAnalistaResponsavel(resolverAnalista(requisicao.analistaResponsavelId()));
         projeto.setDataRecebimento(requisicao.dataRecebimento());
         projeto.setDataArt(requisicao.dataArt());
-        projeto.setNumeroSolicitacao(requisicao.numeroSolicitacao());
+        // O PUT substitui o cadastro inteiro, mas o número da solicitação é a exceção: pode ser
+        // corrigido, nunca apagado. Sem isso, o número obrigatório no envio seria contornável
+        // por uma edição — e um projeto já enviado ficaria sem a chave que casa o retorno por
+        // e-mail com ele, silenciosamente.
+        if (requisicao.numeroSolicitacao() != null && !requisicao.numeroSolicitacao().isBlank()) {
+            projeto.setNumeroSolicitacao(requisicao.numeroSolicitacao().trim());
+        }
         projeto.setPotenciaKwp(requisicao.potenciaKwp());
         return projetoRepository.save(projeto);
     }
@@ -148,13 +155,25 @@ public class ProjetoService {
     }
 
     /**
-     * Só sobrescreve quando veio número. Reenviar sem informar número novo mantém o antigo —
-     * apagá-lo desligaria o projeto do e-mail da Coelba, que é justamente para o que ele serve.
+     * O número da solicitação é <b>obrigatório</b> para enviar à Coelba (decisão do usuário em
+     * 17/09/2026). A guarda fica aqui, e não só no {@code @NotBlank} do DTO, pela mesma razão da
+     * guarda de débito: vale também quando a origem for a importação da planilha ou uma
+     * integração, e não apenas a tela.
+     * <p>
+     * Sem o número, o projeto vai à Coelba sem a chave que casa o retorno por e-mail com ele
+     * (seção 9) — a automação da etapa 3 não teria como saber de que projeto o e-mail fala, e
+     * cairia em {@code SEM_CORRESPONDENCIA}. Era opcional antes, sob o argumento de que o
+     * retorno da Coelba às vezes demora; o que isso produzia era projeto enviado sem chave.
+     * <p>
+     * Vale também no reenvio: é justamente ali que a Coelba pode devolver outro número, e
+     * aceitar vazio manteria o número do ciclo anterior — pior que recusar, porque o e-mail novo
+     * casaria com um número velho.
      */
     private void aplicarNumeroSolicitacao(Projeto projeto, String numeroSolicitacao) {
-        if (numeroSolicitacao != null && !numeroSolicitacao.isBlank()) {
-            projeto.setNumeroSolicitacao(numeroSolicitacao.trim());
+        if (numeroSolicitacao == null || numeroSolicitacao.isBlank()) {
+            throw new NumeroSolicitacaoObrigatorioException();
         }
+        projeto.setNumeroSolicitacao(numeroSolicitacao.trim());
     }
 
     /**

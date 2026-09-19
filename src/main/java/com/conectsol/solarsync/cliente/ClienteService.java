@@ -1,6 +1,7 @@
 package com.conectsol.solarsync.cliente;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -57,6 +58,37 @@ public class ClienteService {
                 .statusTriagem(StatusTriagem.AGUARDANDO_VERIFICACAO)
                 .build();
         return ClienteResponse.de(clienteRepository.save(cliente));
+    }
+
+    /**
+     * Cadastro vindo da sincronização com o Nectar (seção 9). Passa por aqui, e não por
+     * {@code ClienteRepository.save} dentro do módulo de integração, para que todo caminho de
+     * escrita de cliente continue num lugar só — é o que faz o cliente do CRM nascer na fila da
+     * triagem igual ao digitado na tela, em vez de a integração poder inventar outro estado
+     * inicial.
+     * <p>
+     * Devolve {@link java.util.Optional#empty()} quando o negócio já foi importado antes. É o
+     * caso normal, não erro: o job relê a mesma página do CRM a cada execução.
+     */
+    @Transactional
+    public Optional<ClienteResponse> criarDoNectar(ClienteRequest requisicao,
+            String nectarOportunidadeId) {
+
+        if (clienteRepository.existsByNectarOportunidadeId(nectarOportunidadeId)) {
+            return Optional.empty();
+        }
+
+        Cliente cliente = Cliente.builder()
+                .nome(requisicao.nome())
+                .cidade(requisicao.cidade())
+                .vendedor(requisicao.vendedor())
+                .dataPagamento(requisicao.dataPagamento())
+                .ucCoelba(requisicao.ucCoelba())
+                .telefone(requisicao.telefone())
+                .statusTriagem(StatusTriagem.AGUARDANDO_VERIFICACAO)
+                .nectarOportunidadeId(nectarOportunidadeId)
+                .build();
+        return Optional.of(ClienteResponse.de(clienteRepository.save(cliente)));
     }
 
     /**

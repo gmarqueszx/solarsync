@@ -116,13 +116,13 @@ public class DadosDeExemplo implements ApplicationRunner {
         pendenciaService.criar(new PendenciaCriarRequest(semAcao, TipoPendencia.LIGACAO_NOVA,
                 instanteMenos(10), ivan, "Aguardando vistoria de ligação nova"), admin);
 
-        // 3. Pendência em andamento.
-        Long emAndamento = criarCliente("Fernanda Souza (exemplo)", "Camaçari", 20);
-        var pendenciaEmAndamento = pendenciaService.criar(new PendenciaCriarRequest(emAndamento,
+        // 3. Pendência aberta há mais tempo, já com protocolo na Coelba. Não existe status
+        //    "em andamento": apontar a pendência já é iniciá-la, e o que conta o tempo é
+        //    solicitadoEm. O andamento vive na observação e no histórico.
+        Long comProtocolo = criarCliente("Fernanda Souza (exemplo)", "Camaçari", 20);
+        pendenciaService.criar(new PendenciaCriarRequest(comProtocolo,
                 TipoPendencia.TROCA_TITULARIDADE, instanteMenos(18), larissa,
-                "Documentação enviada à Coelba"), admin);
-        pendenciaService.atualizarStatus(pendenciaEmAndamento.getId(),
-                StatusPendencia.EM_ANDAMENTO, ivan, "Protocolo aberto na Coelba");
+                "Documentação enviada à Coelba; protocolo aberto"), admin);
 
         // 4. Pendência cancelada — cliente desistiu.
         Long cancelado = criarCliente("Roberto Alves (exemplo)", "Salvador", 30);
@@ -183,7 +183,10 @@ public class DadosDeExemplo implements ApplicationRunner {
                 "2026-COE-004655", larissa);
         projetoService.reprovar(projetoAprovado.getId(), "Divergência na potência declarada",
                 larissa);
-        projetoService.reencaminhar(projetoAprovado.getId(), hojeMenos(70), null, larissa);
+        // O reenvio recebeu outro número da Coelba — é o caso que o campo obrigatório no
+        // reencaminhar existe para capturar.
+        projetoService.reencaminhar(projetoAprovado.getId(), hojeMenos(70), "2026-COE-005301",
+                larissa);
         projetoService.aprovar(projetoAprovado.getId(), hojeMenos(62), larissa);
 
         // 11. Aprovado e instalado, esperando vistoria: a fila de trabalho da etapa 4.

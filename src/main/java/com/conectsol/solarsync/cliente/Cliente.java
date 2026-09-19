@@ -49,6 +49,18 @@ public class Cliente extends BaseEntity {
     private String telefone;
 
     /**
+     * Id da oportunidade no Nectar, quando o cadastro veio da sincronização com o CRM em vez da
+     * tela. É a chave de idempotência da sincronização (índice único na V13): o mesmo negócio
+     * fechado nunca gera dois clientes, ainda que o job releia a mesma página do CRM.
+     * <p>
+     * É também a procedência do registro. Sem ela, um cliente que ninguém digitou apareceria na
+     * fila da triagem sem explicação — e a criação do cliente não publica evento, então nem o
+     * historico_status contaria de onde ele veio.
+     */
+    @Column(name = "nectar_oportunidade_id", length = 50)
+    private String nectarOportunidadeId;
+
+    /**
      * Resultado da checagem de pendência na Coelba. Fica no Cliente, e não numa entidade
      * própria, porque é o retrato da situação atual dele — mesma escolha feita para
      * {@code Debito} (um registro por cliente); o vai-e-vem fica em {@code historico_status}.

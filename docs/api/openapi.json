@@ -25,6 +25,9 @@
     "description" : "Etapa 1: pendências do cliente na Coelba",
     "name" : "Pendências"
   }, {
+    "description" : "Listas fechadas do cadastro (municípios, vendedores)",
+    "name" : "Referências"
+  }, {
     "description" : "Login por e-mail e senha, e renovação de token",
     "name" : "Autenticação"
   }, {
@@ -428,7 +431,7 @@
     "/api/debitos" : {
       "get" : {
         "description" : "Filtre por tipo=PENDENCIA/HOMOLOGACAO para ver o que está travando cada etapa, por status=ATIVO para ver quem está travado, por paradoHaMaisDeDias para a fila do financeiro, ou use consultadoAntesDe para achar consultas velhas que valem refazer.",
-        "operationId" : "listar_6",
+        "operationId" : "listar_7",
         "parameters" : [ {
           "in" : "query",
           "name" : "filtro",
@@ -797,43 +800,6 @@
         "tags" : [ "Pendências" ]
       }
     },
-    "/api/pendencias/{id}/iniciar" : {
-      "post" : {
-        "operationId" : "iniciar",
-        "parameters" : [ {
-          "in" : "path",
-          "name" : "id",
-          "required" : true,
-          "schema" : {
-            "type" : "integer",
-            "format" : "int64"
-          }
-        } ],
-        "requestBody" : {
-          "content" : {
-            "application/json" : {
-              "schema" : {
-                "$ref" : "#/components/schemas/ObservacaoRequest"
-              }
-            }
-          }
-        },
-        "responses" : {
-          "409" : {
-            "content" : {
-              "*/*" : {
-                "schema" : {
-                  "$ref" : "#/components/schemas/PendenciaResponse"
-                }
-              }
-            },
-            "description" : "Transição inválida a partir do status atual"
-          }
-        },
-        "summary" : "Marca a pendência como EM_ANDAMENTO",
-        "tags" : [ "Pendências" ]
-      }
-    },
     "/api/pendencias/{id}/reabrir" : {
       "post" : {
         "operationId" : "reabrir_1",
@@ -1162,7 +1128,7 @@
     },
     "/api/projetos/{id}/encaminhar" : {
       "post" : {
-        "description" : "Sem dataEncaminhado no corpo, assume hoje. Essa data alimenta a métrica de tempo entre recebimento e envio. Informe o numeroSolicitacao devolvido pela Coelba: é por ele que o retorno por e-mail será casado com o projeto. Exige consulta de débito de HOMOLOGACAO registrada.",
+        "description" : "O numeroSolicitacao devolvido pela Coelba é obrigatório: é por ele que o retorno por e-mail é casado com o projeto, e sem ele o projeto vai à Coelba sem chave nenhuma de volta. Sem dataEncaminhado no corpo, assume hoje — essa data alimenta a métrica de tempo entre recebimento e envio. Exige consulta de débito de HOMOLOGACAO registrada.",
         "operationId" : "encaminhar",
         "parameters" : [ {
           "in" : "path",
@@ -1180,7 +1146,8 @@
                 "$ref" : "#/components/schemas/ProjetoEncaminharRequest"
               }
             }
-          }
+          },
+          "required" : true
         },
         "responses" : {
           "409" : {
@@ -1231,7 +1198,7 @@
     },
     "/api/projetos/{id}/reencaminhar" : {
       "post" : {
-        "description" : "Sem numeroSolicitacao no corpo, mantém o número já registrado.",
+        "description" : "O numeroSolicitacao é obrigatório também aqui: o reenvio é justamente quando a Coelba pode devolver outro número, e deixá-lo de fora manteria o número do ciclo anterior — que é o que o retorno por e-mail usaria para casar. Repita o número se ele não mudou.",
         "operationId" : "reencaminhar",
         "parameters" : [ {
           "in" : "path",
@@ -1249,7 +1216,8 @@
                 "$ref" : "#/components/schemas/ProjetoEncaminharRequest"
               }
             }
-          }
+          },
+          "required" : true
         },
         "responses" : {
           "409" : {
@@ -1342,6 +1310,26 @@
         },
         "summary" : "Registra a reprova; o motivo é obrigatório",
         "tags" : [ "Projetos" ]
+      }
+    },
+    "/api/referencias" : {
+      "get" : {
+        "description" : "É o mesmo padrão que a importação do Nectar aplica: cidade ou vendedor que não casa com estas listas entra nulo, para ser escolhido aqui, em vez de texto livre.",
+        "operationId" : "listar_6",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReferenciasResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Municípios da Bahia e vendedores, em ordem alfabética",
+        "tags" : [ "Referências" ]
       }
     },
     "/api/unificacoes" : {
@@ -2240,8 +2228,15 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "nectarOportunidadeId" : {
+            "type" : "string"
+          },
           "nome" : {
             "type" : "string"
+          },
+          "origem" : {
+            "type" : "string",
+            "enum" : [ "MANUAL", "CRM_NECTAR" ]
           },
           "statusTriagem" : {
             "type" : "string",
@@ -2785,7 +2780,7 @@
             "type" : "array",
             "items" : {
               "type" : "string",
-              "enum" : [ "ABERTA", "EM_ANDAMENTO", "RESOLVIDA", "CANCELADA" ]
+              "enum" : [ "ABERTA", "RESOLVIDA", "CANCELADA" ]
             },
             "uniqueItems" : true
           },
@@ -2832,7 +2827,7 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "ABERTA", "EM_ANDAMENTO", "RESOLVIDA", "CANCELADA" ]
+            "enum" : [ "ABERTA", "RESOLVIDA", "CANCELADA" ]
           },
           "tipo" : {
             "type" : "string",
@@ -2871,7 +2866,7 @@
           },
           "status" : {
             "type" : "string",
-            "enum" : [ "ABERTA", "EM_ANDAMENTO", "RESOLVIDA", "CANCELADA" ]
+            "enum" : [ "ABERTA", "RESOLVIDA", "CANCELADA" ]
           },
           "tipo" : {
             "type" : "string",
@@ -2983,7 +2978,8 @@
             "maxLength" : 50,
             "minLength" : 0
           }
-        }
+        },
+        "required" : [ "numeroSolicitacao" ]
       },
       "ProjetoFiltro" : {
         "type" : "object",
@@ -3218,6 +3214,23 @@
           "vistoriasSolicitadas" : {
             "type" : "integer",
             "format" : "int64"
+          }
+        }
+      },
+      "ReferenciasResponse" : {
+        "type" : "object",
+        "properties" : {
+          "municipios" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "vendedores" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string"
+            }
           }
         }
       },

@@ -263,6 +263,34 @@ class FluxoPendenciaProjetoHttpTest extends AbstractIntegrationTest {
                         {"tipo": "HOMOLOGACAO", "status": "QUITADO"}"""))
                 .andExpect(status().isOk());
 
+        // O número da solicitação é obrigatório (17/09/2026): sem ele o projeto iria à Coelba
+        // sem a chave que casa o retorno por e-mail com ele, e a automação da etapa 3 não teria
+        // como saber de que projeto o e-mail fala.
+        mvc.perform(post("/api/projetos/%d/encaminhar".formatted(projetoId))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"dataArt": "2026-08-20", "dataEncaminhado": "2026-08-25"}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("VALIDACAO"))
+                .andExpect(jsonPath("$.erros[0].campo").value("numeroSolicitacao"));
+
+        // Em branco também não passa: o @NotBlank recusa string vazia, não só ausência.
+        mvc.perform(post("/api/projetos/%d/encaminhar".formatted(projetoId))
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"numeroSolicitacao": "   "}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("VALIDACAO"));
+
+        // E o projeto continua onde estava — recusa não pode ter deixado efeito pela metade.
+        mvc.perform(get("/api/projetos/" + projetoId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RECEBIDO"))
+                .andExpect(jsonPath("$.dataEncaminhado").doesNotExist());
+
         mvc.perform(post("/api/projetos/%d/encaminhar".formatted(projetoId))
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -283,6 +311,17 @@ class FluxoPendenciaProjetoHttpTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElementos").value(1))
                 .andExpect(jsonPath("$.conteudo[0].id").value(projetoId));
+
+        // O PUT substitui o cadastro inteiro, mas não apaga o número: sem esta exceção, a regra
+        // do número obrigatório no envio seria contornável por uma edição, e um projeto já
+        // enviado ficaria sem a chave do e-mail sem ninguém perceber.
+        mvc.perform(put("/api/projetos/" + projetoId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"tipoProjeto": "PROJETO_INICIAL"}"""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.numeroSolicitacao").value("2026-COE-551234"));
 
         mvc.perform(post("/api/projetos/%d/aprovar".formatted(projetoId))
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))

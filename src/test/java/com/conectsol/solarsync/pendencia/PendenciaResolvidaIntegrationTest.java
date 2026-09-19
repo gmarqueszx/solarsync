@@ -90,7 +90,7 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
         Pendencia pendencia = pendenciaRepository.save(Pendencia.builder()
                 .cliente(cliente)
                 .tipo(TipoPendencia.LIGACAO_NOVA)
-                .status(StatusPendencia.EM_ANDAMENTO)
+                .status(StatusPendencia.ABERTA)
                 .solicitadoEm(Instant.now())
                 .responsavel(analista)
                 .build());

@@ -73,9 +73,28 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
     legítimas na operação real (pendência aparece depois, ou era engano, ou o cliente volta num
     novo ciclo). Não sobra transição absurda para barrar, e máquina de estados que aceita tudo é
     burocracia sem proteção
+  - **nectar_oportunidade_id**: preenchido só quando o cadastro veio da sincronização com o CRM
+    (seção 9). Índice único **parcial** (V13) — é a idempotência do job, que relê a mesma página
+    do Nectar a cada execução. Fica no cliente, e não numa tabela de controle, porque é um dado
+    do cliente: responde "de onde veio este cadastro", que é a pergunta de quem vê um cliente
+    que ninguém digitou. Está em `ClienteResponse` por isso — a criação do cliente não publica
+    evento, então sem esse campo nem o `historico_status` contaria a procedência
   - O `PUT /api/clientes/{id}` **não** mexe em `status_triagem` — corrigir telefone não pode, de
     passagem, apagar o fato de que a Coelba já foi consultada
 - **Pendencia** — cliente_id, tipo, status, solicitado_em, resolvido_em, responsavel_id, observação
+  - **Um único status ativo**: `ABERTA` → `RESOLVIDA` | `CANCELADA`, e as duas voltam para
+    `ABERTA`. Apontar a pendência na triagem do cliente **é** iniciá-la — dali o cliente já cai
+    na fila de Pendências e a solicitação já correu na Coelba
+  - ⚠️ `EM_ANDAMENTO` e o endpoint `POST /api/pendencias/{id}/iniciar` (o botão "play" da tela)
+    foram **removidos** em 19/09/2026, decisão do usuário. Eram um clique que não mudava nada:
+    o relógio da métrica de resolução sempre saiu de `resolvido_em - solicitado_em`, e
+    `solicitado_em` é gravado na **criação**. O status a mais só produzia pendência parada em
+    `ABERTA` por esquecimento de clicar, indistinguível de trabalho que ninguém pegou — o
+    oposto do que o `StatusTriagem` do Cliente faz. O andamento vive na observação e no
+    `historico_status`, que é onde cabe texto livre
+  - A V14 converte as linhas `EM_ANDAMENTO` em `ABERTA` e aperta o CHECK. As linhas de
+    `historico_status` que citam `EM_ANDAMENTO` **ficam**: `status_anterior`/`status_novo` são
+    texto livre lá, sem CHECK, e contam a história de quando o play existia
 - **Debito** — cliente_id, **tipo**, status (ativo/quitado), última_consulta_em, detectado_em,
   quitado_em, consultado_por_id. É o retrato da última consulta na agência virtual, não um
   lançamento contábil: reconsultar atualiza o mesmo registro, e o vai-e-vem fica em
@@ -109,11 +128,25 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
     `PROJETO_INICIAL`, `AMPLIACAO`, `CORRECAO`. Os seis da V1 vieram das abas da planilha, que
     separavam *casos operacionais* ("uma placa a mais", "mudança de inversor 5kW") e não tipos de
     projeto — todos são, para a Coelba, ou ampliação da usina existente ou correção de projeto
-  - **numero_solicitacao**: o número que a Coelba devolve ao receber o projeto. É a chave que vai
-    casar o e-mail diário de status com o registro daqui (seção 9) — sem ela a automação teria de
-    casar por nome de cliente, que é ambíguo. Preenchido no `/encaminhar`, porque é lá que ele
-    passa a existir; `q` da listagem busca por ele além de nome e UC. Sem UNIQUE: reenvio pode
-    receber outro número, e a planilha traz o campo irregular
+  - **numero_solicitacao**: o número que a Coelba devolve ao receber o projeto. É a chave que
+    casa o e-mail diário de status com o registro daqui (seção 9) — sem ela a automação teria de
+    casar por nome de cliente, que é ambíguo. `q` da listagem busca por ele além de nome e UC.
+    Sem UNIQUE: reenvio pode receber outro número, e a planilha traz o campo irregular
+    - ⚠️ **Obrigatório no `/encaminhar` e no `/reencaminhar`** (decisão do usuário em
+      17/09/2026). Era opcional, sob o argumento de que o retorno da Coelba às vezes demora; o
+      que isso produzia era projeto enviado **sem chave de volta**, que o e-mail nunca alcança —
+      a automação da etapa 3 cairia em `SEM_CORRESPONDENCIA` sem ninguém entender por quê
+    - Obrigatório **também no reenvio**, e não só no primeiro envio: é ali que a Coelba pode
+      devolver outro número, e aceitar vazio manteria o do ciclo anterior. Pior que recusar,
+      porque o e-mail novo casaria com um número velho. A tela pré-preenche o número atual, então
+      o custo é confirmar
+    - A coluna **segue nulável**: projeto em `RECEBIDO` ainda não foi à Coelba, e a importação da
+      planilha traz o campo irregular. A obrigatoriedade é da ação de enviar, não do campo
+    - O `PUT /api/projetos/{id}` **corrige mas não apaga** o número, ao contrário dos outros
+      campos que ele substitui. Sem essa exceção a regra seria contornável por uma edição, e um
+      projeto já enviado ficaria sem a chave do e-mail em silêncio
+    - `POST /api/projetos/{id}/corrigir-status` (só ADMIN) continua passando por cima, de
+      propósito: é a válvula da importação, onde os dados chegam fora de ordem
   - **potencia_kwp**: porte da usina, para o gestor somar kWp homologado por período
   - `AGUARDANDO_ENVIO`: projeto já preenchido, mas ainda não enviado à Coelba por algum motivo
     operacional. **Não é o estado do cliente com débito**: débito não pausa o projeto, ele
@@ -235,6 +268,7 @@ Duas decisões de negócio confirmadas com o usuário e refletidas abaixo:
 | Vistoria | todos os papéis | ANALISTA, GESTOR, ADMIN | ADMIN |
 | Unificacao | todos os papéis | ANALISTA, GESTOR, ADMIN | ADMIN |
 | `historico_status` | todos os papéis (histórico de um registro e consulta agregada) | **ninguém via API** — escrito exclusivamente pelo listener de domínio | ninguém |
+| `email_coelba` (seção 9) | ninguém via API — não tem tela, a consulta é no banco | **ninguém via API** — escrito exclusivamente pelo job do Gmail | ninguém |
 | Dashboard (seção 5) | todos os papéis | — | — |
 | Usuário / papéis | GESTOR, ADMIN | GESTOR, ADMIN | ADMIN |
 
@@ -411,14 +445,35 @@ Cada item abaixo quebrou o build ou a aplicação neste projeto — não confie 
   │   └── dto
   ├── historico (auditoria de status)
   ├── dashboard          (agregações em SQL nativo sobre historico_status)
-  ├── common
-  │   ├── config    (WebMvc, JpaAuditing, OpenAPI)
-  │   ├── security  (UsuarioAutenticado + resolver, meta-anotações de RBAC)
-  │   ├── web       (PaginaResponse, ApiExceptionHandler, MotivoRequest)
-  │   ├── event     (EntidadeStatusEvent)
-  │   └── exception
-  └── integracao         (futuro — nectar, gmail; ver seção 9)
+  ├── common/referencia  (listas fechadas do cadastro; ver abaixo)
+  ├── integracao         (entrada automática; ver seção 9)
+  │   ├── nectar    (job de polling, cliente HTTP, ingestão de negócio fechado)
+  │   └── gmail     (cliente HTTP, parser do e-mail da Coelba, trilha email_coelba)
+  └── common
+      ├── config    (WebMvc, JpaAuditing, OpenAPI)
+      ├── security  (UsuarioAutenticado + resolver, meta-anotações de RBAC)
+      ├── web       (PaginaResponse, ApiExceptionHandler, MotivoRequest)
+      ├── event     (EntidadeStatusEvent)
+      └── exception
   ```
+  O `integracao` não tem controller: são jobs agendados que chamam os services dos módulos, o
+  mesmo caminho da tela. É o que a regra arquitetural da seção 3 comprava.
+
+**Listas fechadas do cadastro** (`common/referencia`, 17/09/2026): os 417 municípios da Bahia e
+os vendedores, em `src/main/resources/referencia/*.txt`, servidos por `GET /api/referencias`.
+<p>
+⚠️ **Viviam só no frontend** (`src/data/constantes.ts`) e passaram para o servidor porque a
+importação do Nectar precisa delas aqui: cidade e vendedor que vêm do CRM são normalizados contra
+o mesmo padrão que o formulário oferece, e manter as listas só no frontend significaria duas
+cópias — exatamente o que esta seção já registra sobre regra de negócio duplicada entre os dois
+repositórios. O arquivo do frontend **foi apagado**; ele agora lê do endpoint.
+<p>
+`Referencias.municipioCanonico` / `vendedorCanonico` comparam sem acento, sem caixa e sem espaço
+sobrando, e devolvem **nulo** para o que não está na lista. Vendedor casa pelo primeiro nome,
+porque é só ele que a lista tem e o CRM manda o nome completo. Arquivos de recurso e não
+constantes em Java por causa dos 417 municípios; e não tabela no banco porque mudam por deploy,
+não pela operação — os vendedores são o caso que mais tende a virar tabela, já que mudam a cada
+contratação.
   Cada módulo de etapa segue o mesmo padrão: entidade `extends BaseEntity` + enums de status +
   `JpaRepository` (+ `JpaSpecificationExecutor` onde há filtro) + `Specs` + service + DTOs em
   `<modulo>/dto` + controller.
@@ -451,6 +506,16 @@ Cada item abaixo quebrou o build ou a aplicação neste projeto — não confie 
   |---|---|
   | `POST /api/pendencias/{id}/resolver` | `PENDENCIA` |
   | `POST /api/projetos/{id}/encaminhar` e `/reencaminhar` | `HOMOLOGACAO` |
+
+  ⚠️ **Ordem das recusas no envio**: o `@NotBlank` do `numeroSolicitacao` é validação de corpo e
+  roda no controller, **antes** da guarda de débito, que é regra de negócio no service. Então um
+  envio sem número responde 400 `VALIDACAO`, não 409 `DEBITO_NAO_CONSULTADO`, mesmo quando as
+  duas coisas faltam. Importa para quem escrever teste: mandar `{}` para provar a guarda de
+  débito passa a ser aprovado pelo motivo errado — o `DebitoBloqueiaEnvioHttpTest` tem uma
+  constante `NUMERO_VALIDO` exatamente por isso.
+- **409 `NUMERO_SOLICITACAO_OBRIGATORIO`** existe além do 400 do `@NotBlank`: a guarda vive
+  também no `ProjetoService`, para valer quando a origem não é a tela (a importação da planilha,
+  ou uma integração futura). Mesma razão da guarda de débito estar no service.
 
   ⚠️ Isto **reverteu** a assimetria anterior, em que o envio à Coelba tratava "sem consulta" como
   sem débito para não travar cliente novo. Motivo: na operação real é o projetista quem consulta
@@ -529,17 +594,364 @@ uma única empresa (ConectSol), não SaaS multi-cliente. Isso muda a prioridade 
 **Resumo prático**: dos 12, os itens 4 e 7 não se aplicam no sentido original (são pensados pra
 SaaS multi-cliente); o 5 é opcional; os outros 9 valem para o SolarSync.
 
-## 9. Integrações externas (fase posterior)
+## 9. Integrações externas
 
 Objetivo declarado do projeto: sair da planilha 100% manual para um sistema com margem de
-automação. As integrações abaixo **não estão implementadas** — mas o desenho de eventos da
-seção 3 já é o ponto de extensão delas, então nenhuma exige refatoração do domínio.
+automação. As **duas integrações de entrada estão implementadas** (17/09/2026) e o desenho de
+eventos da seção 3 foi o ponto de extensão delas — nenhuma exigiu refatoração do domínio.
 
-| Integração | Direção | Como encaixa no desenho atual |
+| Integração | Direção | Estado |
 |---|---|---|
-| **Nectar (CRM)** — criar cliente/projeto quando negócio fecha | Entrada | Webhook do Nectar → chama os services do domínio (`ClienteRepository` + `ProjetoService`), mesmo caminho da tela |
-| **Nectar (CRM)** — refletir status de volta pro comercial | Saída | Novo `@Component` em `integracao/nectar` com `@TransactionalEventListener(AFTER_COMMIT)` sobre `EntidadeStatusEvent`. Zero mudança em `pendencia`/`projeto` |
-| **Gmail** — ler e-mail diário da Coelba (aprovado/reprovado/em análise) | Entrada | Job em `integracao/gmail` faz parsing do e-mail e chama `ProjetoService.atualizarStatus(...)` — o mesmo método que a API usa, então auditoria e automação disparam igual |
+| **Nectar (CRM)** — criar cliente quando negócio fecha | Entrada | **Feito**: job puxa a cada 10 min (`integracao/nectar`) |
+| **Gmail** — ler o retorno diário da Coelba | Entrada | **Feito**: job lê a cada 15 min e aplica o status (`integracao/gmail`) |
+| **Nectar (CRM)** — refletir status de volta pro comercial | Saída | Não feito. `@Component` em `integracao/nectar` com `@TransactionalEventListener(AFTER_COMMIT)` sobre `EntidadeStatusEvent`. Zero mudança em `pendencia`/`projeto` |
+
+**Ambas desligadas por padrão**, e é o padrão que importa: os jobs são beans
+`@ConditionalOnProperty`, então sem `solarsync.nectar.ativo=true` / `solarsync.gmail.ativo=true`
+não existe nada agendado — nem nos testes, nem no dev de quem não está mexendo nisso. Nenhuma
+credencial no repositório (item 6 do checklist): ver `.env.example`.
+
+⚠️ **`solarsync.*.ativo=true` em `config/application.properties` vazaria para os testes.** Aquele
+arquivo é lido também durante os testes e com precedência sobre o classpath (seção 6) — então
+ligar uma integração ali criaria os jobs dentro de **toda** suíte, fazendo chamada de rede de
+verdade: o job do Nectar varrendo o CRM da empresa e o do Gmail lendo a caixa real e aplicando
+status em projetos do banco de teste. Por isso o `AbstractIntegrationTest` força as duas como
+`false`, ao lado do `dados-de-exemplo` que já caía nessa. **Guardar o token ali é seguro; ligar o
+`ativo` ali, não** — o `ativo` vai por variável de ambiente.
+
+⚠️ E não é só o `ativo`: **`solarsync.gmail.somente-conferencia` vaza igual**, e `ativo=false`
+não protege disto. Só o job e o cliente HTTP são condicionais; o `RetornoCoelbaService` existe
+sempre, então o modo conferência ligado na configuração local fez **todo** teste que prova que o
+e-mail muda o status do projeto receber `CONFERENCIA`. Custou quatro testes vermelhos, e por
+isso o `AbstractIntegrationTest` agora força também essa. Regra geral: propriedade que muda
+comportamento de service — e não só a existência de um bean — precisa de override lá.
+
+Nenhuma das duas adiciona endpoint. São jobs que chamam os services do domínio — o mesmo caminho
+da tela —, o que é exatamente o que a regra arquitetural da seção 3 comprava: auditoria em
+`historico_status` e máquina de estados valem igual, venha a mudança de um clique ou de um
+e-mail. `@EnableScheduling` fica em `integracao/IntegracaoConfig`.
+
+### Nectar: entrada de clientes
+
+`NectarSincronizacaoJob` → `NectarClient` → `NectarIngestaoService` → `ClienteService`.
+
+- **Puxa, não recebe webhook** (decisão do usuário em 17/09/2026). Funciona sem a API exposta na
+  internet — o HTTPS ainda é item pendente (seção 8, item 12) — e sem depender de alguém
+  configurar webhook no painel do Nectar. O preço é até 10 min de atraso, que não importa: a
+  etapa seguinte é humana.
+- **Cria só o Cliente**, em `AGUARDANDO_VERIFICACAO` — nunca o Projeto (decisão do usuário). O
+  CRM não sabe se há pendência na Coelba, e quem sabe é a analista. Criando o projeto aqui, o
+  cliente sairia da fila da triagem como se alguém já tivesse checado, que é exatamente a
+  confusão entre "checado, não tem nada" e "ninguém olhou ainda" que o `StatusTriagem` desfaz.
+  O Projeto nasce sozinho depois, pelos listeners que já existiam.
+- **Só cria, nunca atualiza.** A analista corrige nome, cidade e telefone na triagem, e deixar o
+  CRM sobrescrever isso a cada 10 min desfaria a correção. Depois da entrada, quem manda no
+  cadastro é o SolarSync.
+- **Idempotência por oportunidade**, não por pessoa (confirmado pelo usuário em 17/09/2026):
+  `cliente.nectar_oportunidade_id` com índice único parcial (V13). Um cliente com vários negócios
+  ("PROJETO 2" a "PROJETO 5" do mesmo JOSE NERI) vira **um cadastro por projeto** — cada
+  oportunidade é uma usina distinta, com UC e pendência próprias, e a planilha substituída também
+  tinha uma linha por projeto. Vai no cliente, e não numa tabela de controle, porque é um dado do
+  cliente: responde "de onde veio este cadastro".
+- **A procedência aparece na tela**: `ClienteResponse` traz `origem`
+  (`MANUAL` | `CRM_NECTAR`, derivada de `nectarOportunidadeId != null`) e a listagem de Clientes
+  mostra um selo "CRM" (pedido do usuário em 17/09/2026). Importa na triagem porque a confiança
+  nos dados é diferente: no cliente do CRM, campo em branco significa "o CRM não sabia" e pede
+  preenchimento; no manual, é esquecimento. Campo próprio em vez de o frontend deduzir do id — a
+  regra fica num lugar só. Derivado e não coluna: uma coluna poderia divergir do id que a origina.
+- **`dataFechamento` vira `dataPagamento`**: é o marco zero da métrica "tempo médio sem ninguém
+  mexer no cliente" (seção 5), e o negócio fechar no CRM é o que o Nectar tem de mais próximo de
+  "o financeiro validou o cliente", que é o gatilho real da etapa 1.
+- A **UC da Coelba nasce nula**: ela é descoberta na própria checagem da etapa 1, por quem
+  consulta a agência virtual — não vem do CRM.
+#### O contrato real do Nectar (conferido em 17/09/2026)
+
+`GET /oportunidades` em `https://app.nectarcrm.com.br/crm/api/1`, cabeçalho `Access-Token`,
+paginação `page`/`displayLength` (máx. 200). Os campos de uma oportunidade **não são
+documentados**; tudo abaixo saiu da resposta real da carteira da ConectSol, e `OportunidadeNectar`
+é o único ponto do projeto que os conhece. Os testes usam esses dados reais, defeitos incluídos.
+
+⚠️ **`pipeline=<nome do funil>` é o único filtro que a API respeita.** Foram testados
+`etapa`, `etapaAtual`, `idEtapa`, `sequencia`, `funilVenda`, `idFunilVenda`, `funil` e
+`etapaNome`: todos são **silenciosamente ignorados** e devolvem a carteira inteira — o pior modo
+de falhar, um filtro que parece funcionar. Daí a consulta ser por funil e a etapa ser filtrada em
+Java.
+
+**As duas etapas de entrada** (confirmadas pelo usuário em 17/09/2026), padrão em
+`NectarProperties`:
+
+| Funil | Etapa | Ids |
+|---|---|---|
+| `5- Financeiro` | `VALIDADO PELO FINANCEIRO` | funil 58569, etapa 288685 |
+| `4- Nota Fiscal` | `ADIANTAR PROJETO COELBA PARA BANCO OU VENDEDOR` | funil 58574, etapa 288704 |
+
+A etapa é identificada por **funil + nome**, nunca por um só. O número da etapa é a sequência
+*dentro* do funil (a etapa 4 existe nos treze funis), e o nome também se repete: "VALIDADO PELO
+FINANCEIRO" aparece no `5- Financeiro` e, como "FUNCIONANDO | VALIDADO PELO FINANCEIRO", no
+`7- Instalação` — onde o cliente está instalado e funcionando, não entrando no fluxo. Os dois
+nomes são comparados sem acento, sem caixa e sem espaço sobrando, porque são digitados no painel
+e o custo de errar é um cliente que nunca aparece na fila da triagem, sem erro em lugar algum.
+Volume atual: 13 oportunidades nas duas etapas, contra 308 no funil 5 e 23 no funil 4 — três
+requisições por execução.
+
+Três armadilhas do formato, todas com teste nomeando o caso:
+
+- `id` é **número** e `etapa` é o **número da sequência**, não um objeto. O nome da etapa vem em
+  `etapaNome`. O mapeamento que eu havia escrito por suposição quebrava a desserialização aqui.
+- ⚠️ **`dataCriacao` vem corrompida** numa boa parte da base: anos `0024`, `0026`, `0028` (dia e
+  mês trocados na origem). Não é lida em lugar nenhum — usá-la faria a métrica de tempo parado
+  render dois mil anos. `stageEntryDate` é confiável.
+- **Não existe campo de cidade** na oportunidade, no cliente nem nos campos personalizados.
+
+**`dataPagamento`** vem do campo personalizado **"Data do Pagamento"** (`camposPersonalizados`,
+mapa indexado pelo rótulo, valor em `dd/MM/yyyy`) — é literalmente o dado que se procura. O
+rótulo é configurável (`solarsync.nectar.campo-data-pagamento`).
+
+⚠️ **É o único dado de pagamento que a API expõe** (conferido em 17/09/2026, a pedido do
+usuário): das 20 definições de campo personalizado do Nectar, só essa fala de pagamento, e
+`/propostas` não tem nenhum campo de valor de entrada, parcela ou condição. As condições de
+pagamento existem só como texto solto no título da oportunidade ("R$ 1000 + 15X R$ 453,34").
+Preenchido em **14 das 20** oportunidades nas etapas de entrada; sem ele, usa-se
+`stageEntryDate`, que para a etapa "VALIDADO PELO FINANCEIRO" é exatamente quando o financeiro
+validou. Nas 6 que caíram no plano B a data saiu `21/05/2026` — quando a carteira foi importada
+em massa para o Nectar, não um pagamento real. O plano B continua certo para negócio novo, e
+errado para esses legados.
+
+**O nome do cliente e a cidade saem do nome da oportunidade**, por convenção da equipe
+(`CLIENTE_CIDADE_VENDEDOR_VALOR_TENSÃO`, com prefixo opcional entre parênteses marcando o tipo
+do caso — `(Ampliação)`, `(PROJETO 3)`):
+
+```
+HUDSON OLIVEIRA SOUZA_VITÓRIA DA CONQUISTA_RODRIGO_3X + R$ 666,67 + 48X + R$ 526,40_380/220V
+```
+
+- **Nome**: o campo de nome do cliente no Nectar **frequentemente traz o título inteiro** — 3 de
+  6 na segunda importação real. Por isso o nome também passa pelo primeiro trecho da convenção.
+  A guarda é exigir **três ou mais** trechos: nome de pessoa não tem isso, e assim um nome
+  legítimo com um sublinhado solto não é cortado.
+- **Cidade**: segundo trecho. A guarda é "o trecho tem uma palavra de três letras ou mais" — uma
+  regra só, em vez de uma lista de formatos a barrar, porque a lista sempre esquece um: foi assim
+  que `380/220V` passou na primeira versão.
+
+**Cidade e vendedor saem no padrão do cadastro, não como o CRM os escreveu** (pedido do usuário
+em 17/09/2026). A primeira importação real produziu "CACULE", "VITÓRIA DA CONQUISTA",
+"Vitória Da Conquista" e "Brumado" como cidades diferentes, e vendedores como "Rodrigo soares" e
+"Deilson Abrantes" fora da lista de seleção da tela. Agora passam por `Referencias` (ver seção
+6): cidade casa com os 417 municípios da Bahia, vendedor casa pelo **primeiro nome** (a lista tem
+só ele), ambos ignorando caixa e acento.
+
+⚠️ **O que não casa entra nulo**, não como texto livre — é o que preserva o padrão. Vale
+principalmente para vendedor: o campo "responsável" do Nectar carrega gente do administrativo
+além dos vendedores (a importação trouxe "Thainara Gomes", "Evelin Barros", "Evelyn Natyelle"),
+e adivinhar que são vendedoras poluiria o campo. O job loga um WARN por valor não reconhecido —
+foi assim que apareceu "Zenildo", vendedor que não está na lista.
+
+### Gmail: retorno da Coelba
+
+`RetornoCoelbaJob` → `GmailClient` → `ParserEmailCoelba` → `RetornoCoelbaService` →
+`ProjetoService.aprovar/reprovar`.
+
+- **Aplica o status automaticamente** (decisão do usuário em 17/09/2026, contra a alternativa de
+  uma fila de confirmação). A ressalva registrada na hora: e-mail mal interpretado reprova um
+  projeto de verdade e suja o `historico_status`, que sustenta o dashboard. O que compensa isso
+  é o parser recusar palpite e a tabela `email_coelba` guardar tudo (abaixo).
+- Autenticação por **refresh token** de uma conta OAuth comum, não por conta de serviço com
+  delegação de domínio: a delegação exige configuração no console do Workspace pelo
+  administrador do domínio, e aqui basta autorizar uma vez a caixa que já recebe o e-mail.
+  Escopo `gmail.readonly` — **o job nunca escreve na caixa**.
+- Escrito sobre o `RestClient` do Spring, sem as bibliotecas cliente do Google: são duas
+  chamadas GET e uma de token, e o `google-api-services-gmail` traria toda a pilha HTTP e de
+  JSON do Google para conviver com o Jackson 3 do Boot 4.
+- **Casa pelo `numero_solicitacao`, nunca por nome de cliente** (é para isso que o campo existe,
+  V12). O parser extrai *candidatos* generosamente — todos os números do texto, com preferência
+  pelos que estão perto de "solicitação"/"protocolo" — e quem confirma qual é o número de
+  verdade é o casamento com um projeto existente. Errar o formato faria a integração perder
+  e-mail; ser generoso só produz candidato que não casa com nada.
+- Entre projetos com o mesmo número (o reenvio pode receber outro, e `numero_solicitacao` não é
+  único), os em `ENCAMINHADO`/`REENCAMINHADO` têm precedência: o retorno é sobre o ciclo
+  pendente. Sobrando mais de um, **não aplica** — escolher no escuro é pior que não agir.
+- A data de aprovação é a **data do e-mail**, no fuso `America/Bahia`, e não a da execução do
+  job — mesma razão pela qual o débito registra a data da consulta e não a da digitação (seção
+  5): senão a métrica de tempo até aprovação mediria a agilidade do job. Um e-mail das 20h30 em
+  Salvador é 23h30 UTC e viraria o dia seguinte sem o fuso.
+
+#### O e-mail real, conferido em 19/09/2026
+
+O usuário forneceu três e-mails de verdade, e eles **desmentiram o desenho anterior do parser**.
+Estão colados como chegam em `EmailRealDaNeoenergiaTest` — é esse arquivo, e não este texto, que
+diz o que foi observado em vez de suposto.
+
+Remetente: **`noreplyportalgd@neoenergia.com`**, assunto
+`Portal da Geração Distribuída: Solicitação <número>`. A caixa que os recebe é
+**`projetos.conectsolparatodos@gmail.com`** (Gmail comum, não Workspace — o que decide o tipo de
+cliente OAuth; ver seção 10).
+
+⚠️ **A consulta padrão não casava com nenhum deles.** Era
+`from:(coelba.com.br OR neoenergia.com.br)`, e o domínio real é `neoenergia.com` — sem o `.br`.
+A integração ligada teria lido uma caixa vazia todo dia, sem erro em lugar nenhum. É o modo de
+falhar mais caro possível, e só apareceu porque os e-mails foram conferidos antes de ligar.
+
+⚠️ **O resultado não está em adjetivo nenhum.** O e-mail é uma notificação de mudança de etapa:
+
+```
+Sua solicitação de acesso ... passou para uma nova etapa. Informamos que as informações e
+documentação foram recebidas e serão avaliadas pela distribuidora.
+Número da solicitação: 2608198955
+Etapa anterior: Em Análise Técnica
+Etapa atual: Aguardando solicitação de vistoria e Conexão
+```
+
+Nenhuma das palavras que o parser procurava (`deferid`, `indeferid`, `homologad`, `aprovad`)
+aparece. Pior: **aquele parágrafo em prosa é idêntico, palavra por palavra, no e-mail que
+confirma o envio e no que anuncia a aprovação**. Só a linha `Etapa atual` distingue os dois.
+
+E a armadilha que teria custado caro: no e-mail de aprovação, a **etapa anterior** é "Em Análise
+Técnica". Um parser lendo termos no texto inteiro devolveria "em análise" — a aprovação seria
+descartada em silêncio e o projeto ficaria parado em `ENCAMINHADO` para sempre, com a Coelba
+tendo aprovado.
+
+Daí o parser ter **dois caminhos, nesta ordem**:
+
+1. **A linha `Etapa atual:`**, quando existe, e mais nada do texto. Etapa desconhecida vira
+   `NAO_RECONHECIDO` e **não** cai no caminho 2 — naquele corpo, procurar termo solto é ler o
+   texto que não diz nada. As etapas são configuração (`solarsync.coelba.etapas-*`):
+   | Etapa atual | Resultado |
+   |---|---|
+   | `Aguardando solicitação de vistoria e Conexão` | **APROVADO** — confirmado pelo usuário em 19/09/2026: é essa a notificação que, para a ConectSol, significa projeto aprovado. E é literalmente o ponto em que o SolarSync manda o projeto para a fila da Vistoria |
+   | `Em Análise Técnica`, `Aguardando Documentação` | acompanhamento, nada muda |
+2. **Busca por termos**, só quando não há `Etapa atual`. É o caso do **cancelamento**, que não
+   anuncia etapa: "Sua solicitação ... foi cancelada", com `Motivo do cancelamento:` em linha
+   própria. O motivo sai dessa linha rotulada e não do recorte em volta do termo — "cancelada"
+   aparece na saudação, então o recorte genérico traria cabeçalho e link junto.
+
+Cancelamento na Coelba = `REPROVADO` no SolarSync, confirmado pelo usuário ao rotular o e-mail
+como "reprova".
+
+#### O fluxo real do portal, e a etapa 4 automatizada
+
+Reconstruído em 19/09/2026 a partir de 120 e-mails reais, usando o par `Etapa anterior → Etapa
+atual` de cada um como aresta. **São ~30 e-mails por dia** (5347 em 180 dias), o que sozinho
+mudou dois dimensionamentos: o teto por execução subiu de 50 para 300, e a ideia de varrer 90
+dias no ensaio era inviável.
+
+| `Etapa atual` | Frequência | O que faz no SolarSync |
+|---|---|---|
+| *(prosa, sem linha de etapa)* "passará para a etapa de estudos" | 20% | nada — acompanhamento |
+| `Em Análise Técnica` | 12% | nada |
+| `Aguardando solicitação de vistoria e Conexão` | 14% | **Projeto → APROVADO** |
+| `Realizando vistoria e Conexão` | 33% | **Vistoria → SOLICITADA** |
+| `Ponto de Conexão Aprovado` | 19% | **Vistoria → APROVADA** |
+| `Solicitação Concluída` | raro | nada (decisão do usuário) |
+
+⚠️ **`Etapa anterior` é lixo, e o portal manda notificações fora de ordem.** Dois e-mails da mesma
+solicitação chegaram com **quatro segundos** de diferença, um deles com `Data limite` já vencida,
+e um trazia `Etapa anterior: Solicitação Concluída` — etapa que nunca foi atual de nada. Quem
+desempatou a ordem real foi a `Data limite` de cada um. Duas consequências no código:
+
+- só `Etapa atual` é lida, nunca `Etapa anterior`;
+- o job processa **do mais antigo para o mais novo**, invertendo a ordem do Gmail. Na ordem
+  original, um lote atrasado terminaria aplicando o status do e-mail mais velho por último.
+
+**A vistoria nunca é criada pela integração** (decisão do usuário): criar exige a data de
+instalação, que é evento de campo e não existe no portal. O e-mail só avança uma vistoria que já
+existe; sem ela, fica `SEM_CORRESPONDENCIA`. O preço assumido é que, se ninguém registrou a
+instalação, aquele retorno não é aplicado — e não volta, porque o e-mail já contará como
+processado.
+
+#### Buscar só os projetos que esperam retorno
+
+`solarsync.gmail.somente-projetos-conhecidos=true` (pedido do usuário em 19/09/2026, **para
+produção**) recorta a busca aos e-mails que citam o `numero_solicitacao` de um projeto que ainda
+espera notícia — `ProjetoRepository.numerosAguardandoRetornoDaCoelba()`, em lotes de 50 números
+por consulta porque a busca do Gmail tem limite de tamanho.
+
+⚠️ **São duas esperas, não uma.** Encaminhado/reencaminhado cobre a homologação; a vistoria em
+aberto cobre a etapa 4, que chega com o projeto já em `APROVADO`. Recortar só pelos encaminhados
+desligaria a automação da vistoria **em silêncio** — o e-mail simplesmente deixaria de ser
+buscado, e nenhum teste de parser acusaria. É o que o `NumerosAguardandoRetornoTest` protege.
+
+Fica **desligado por padrão**: num banco sem os projetos da operação a lista sai vazia e o job
+não busca nada, o que é o comportamento certo mas inútil no ensaio — e é varrendo a caixa
+inteira que se descobre formato novo.
+
+⚠️ **O parser não adivinha** (`ParserEmailCoelba`), e é isso que torna o automático aceitável:
+
+- afirmação dupla no mesmo e-mail (aprovação **e** reprovação) não escolhe uma: registra
+  `AMBIGUO` e o projeto fica como está;
+- **negação é tratada**: "não deferida" é reprovação, não aprovação. Sem isso, a negação de um
+  termo de aprovação seria lida como aprovação — o erro mais caro possível aqui;
+- os termos casam com **fronteira de palavra no começo** e sufixo livre no fim. As duas metades
+  importam: o sufixo livre é o que permite configurar o radical (`deferid` casa "deferida" e
+  "deferido"), e a fronteira é o que impede `deferid` de casar **dentro** de "indeferido" — sem
+  ela todo indeferimento cairia como ambíguo, e a integração nunca aplicaria uma reprovação
+  anunciada com a redação mais provável da Coelba. Custou um bug encontrado na revisão dos
+  casos de teste;
+- os termos **e as etapas** são configuração (`solarsync.coelba.termos-*` e `.etapas-*`),
+  comparados sem acento e sem caixa. A Neoenergia muda a redação sem avisar, e ajustar uma
+  propriedade é mais rápido que um deploy — vale principalmente para uma etapa nova, que é o
+  que mais tende a aparecer.
+
+#### Modo conferência (19/09/2026)
+
+`solarsync.gmail.somente-conferencia=true` é o ensaio antes da estreia: o job lê os e-mails de
+verdade, roda o parser, casa com o projeto, grava em `email_coelba` **o que teria feito** — e
+não muda status nenhum. É o único desvio no caminho, e fica no fim de propósito: tudo antes
+dele (parser, extração do número, escolha do projeto, motivo da reprova) é exatamente o que
+roda no modo normal, senão o ensaio provaria um caminho diferente do que vai ao ar.
+
+Existe porque a instrução anterior — "antes de ligar, processar alguns e-mails reais e conferir
+`email_coelba.resultado`" — era contraditória: *processar* é aplicar, então a conferência só
+acontecia depois de o primeiro palpite errado já ter reprovado um projeto de verdade e sujado o
+`historico_status` que sustenta o dashboard. Decisão do usuário em 19/09/2026.
+
+Dois detalhes que fazem o ensaio funcionar, e sem os quais ele seria pior que não existir:
+
+- **`CONFERENCIA` não conta como processado** (`EmailCoelbaRepository.idsJaProcessados`).
+  Desligado o modo, esses e-mails voltam a ser lidos e enfim aplicados. Fosse o contrário, o
+  ensaio consumiria em silêncio justamente os e-mails que importavam — e a integração estrearia
+  já tendo perdido a semana conferida.
+- **Reler atualiza o registro em vez de duplicar**, e no modo conferência o job não descarta
+  mensagem conhecida. É o que fecha o ciclo de ajustar os termos em `solarsync.coelba`,
+  reiniciar e ver o novo veredito sobre os mesmos e-mails, sem depender de a Coelba mandar um
+  novo. Custa uma chamada HTTP por mensagem por execução; o modo é temporário.
+
+O log é **WARN** a cada execução, e não INFO: modo conferência esquecido ligado é a integração
+parecendo funcionar sem nunca mudar um projeto.
+
+**Tabela `email_coelba`** (V13) — duas funções, e a primeira é o que a obriga a existir:
+
+1. **Idempotência**: o job lista por consulta (`newer_than:7d`), então as mesmas mensagens voltam
+   na execução seguinte. O único em `mensagem_id` é o que impede reaplicar o status. A
+   alternativa — rotular ou marcar como lida no Gmail — exigiria escopo de escrita na caixa.
+2. **Auditoria**: o status muda sozinho e **não há tela** (decisão do usuário), então tem de
+   haver onde olhar para responder "por que este projeto foi reprovado ontem às 8h". Guarda
+   inclusive o e-mail que o parser **não** entendeu — o caso que não pode desaparecer em
+   silêncio. O `resultado` tem oito valores (`APLICADO`, `CONFERENCIA`, `SEM_ALTERACAO`,
+   `NAO_RECONHECIDO`, `SEM_CORRESPONDENCIA`, `AMBIGUO`, `TRANSICAO_INVALIDA`, `ERRO`) porque
+   cada um aponta para uma causa e uma correção diferentes. A V15 abriu o CHECK para
+   `CONFERENCIA`.
+
+Como `historico_status`, **não tem endpoint de escrita** — só o job escreve. E, como ele, o
+`projeto_id` **não tem FK**: com FK, excluir um projeto passaria a falhar com 409 por causa da
+trilha da integração.
+
+⚠️ **`RetornoCoelbaService` não é `@Transactional`, de propósito.** Cada passo abre a sua
+transação: a mudança do projeto dentro do `ProjetoService`, e o registro em `email_coelba`
+depois. Se fossem a mesma, uma transição barrada pela máquina de estados marcaria a transação
+como "somente rollback" e o registro do que aconteceu — justamente o que se quer guardar — iria
+embora junto. Há teste para esse caso (`transicaoBarradaPelaMaquinaDeEstadosNaoMudaNadaMasFicaRegistrada`).
+
+**Conta de integração**: as mudanças automáticas são atribuídas a `integracao@conectsol.com`
+(semeada pela V13, `ativo = false`, sem senha e sem papel), para a linha do tempo do projeto
+dizer "Integração automática" em vez de deixar o autor em branco — indistinguível de um registro
+importado da planilha. `ativo = false` é a proteção: não entra pelo login, não renova token e não
+aparece em `/api/usuarios/lookup?ativo=true`, então ninguém atribui trabalho a ela por engano.
+Os jobs chamam os services direto, sem passar por `@PreAuthorize`, então papel nenhum é
+necessário.
+
+**Falha nunca encerra o agendamento.** Cada job trata a exceção de rede, e cada item (uma
+oportunidade, um e-mail) é tratado à parte — o Nectar fora do ar, um token revogado ou uma
+linha problemática no CRM custam uma execução, não a integração.
 
 Ponto de atenção da etapa 1 do fluxo (seção 1): hoje o analista atualiza pendência resolvida em
 dois lugares (planilha + Trello). O SolarSync elimina a planilha; decidir depois se o Trello
@@ -593,6 +1005,13 @@ histórico falha com 409. Desative em vez de apagar — é o caminho previsto.
 | `SOLARSYNC_ADMIN_SENHA_INICIAL` | admin da V3 segue sem senha e **ninguém consegue entrar** |
 | `SOLARSYNC_DADOS_DE_EXEMPLO` | banco fica vazio (comportamento normal) |
 | `SOLARSYNC_CORS_ORIGENS` | `http://localhost:5173` |
+| `SOLARSYNC_NECTAR_ATIVO` / `_TOKEN` | integração com o CRM desligada: o job não existe e nenhum cliente entra sozinho (seção 9) |
+| `SOLARSYNC_GMAIL_ATIVO` / `_CLIENT_ID` / `_CLIENT_SECRET` / `_REFRESH_TOKEN` | leitura do e-mail da Coelba desligada: o job não existe e o status do projeto só muda pela tela |
+| `SOLARSYNC_GMAIL_SOMENTE_CONFERENCIA` | **falso** — o job aplica o status. Enquanto a redação real da Coelba não for conferida, esta é a variável que precisa estar em `true` (seção 9) |
+
+⚠️ `solarsync.gmail.ativo=true` **sem as três credenciais** não impede o boot — loga um ERROR na
+construção do cliente e falha em toda execução. Deliberado: derrubar a aplicação por causa de uma
+integração auxiliar mal configurada deixaria o sistema inteiro fora do ar por um e-mail não lido.
 
 **Dados de exemplo** (`SOLARSYNC_DADOS_DE_EXEMPLO=true`, só em dev): `exemplo/DadosDeExemplo`
 semeia 20 clientes cobrindo todos os estados do fluxo — pendência aberta/em andamento/resolvida/
@@ -659,6 +1078,53 @@ Coisas que funcionam como projetado, mas cujo efeito colateral vale ter em vista
   `TypeError` quando não alcança o servidor, e o `AuthContext` do frontend trata no `catch`
   genérico — a tela diz "credenciais inválidas" quando o backend está desligado. Confunde, e é
   simples de separar.
+- **`email_coelba` não tem tela** (decisão do usuário em 17/09/2026: "nenhuma tela; só log do
+  servidor"). É a mesma armadilha do item acima, invertida: os dados existem e ninguém tem como
+  olhar sem acesso ao banco. Vale enquanto só o João Gabriel diagnostica; no dia em que a Nycole
+  perguntar "por que este projeto foi reprovado", o caminho é uma listagem só-leitura de
+  `email_coelba` filtrada por `resultado`. A tabela já foi desenhada para isso.
+- **Ninguém é avisado quando a integração para de entender o e-mail.** Se a Coelba mudar a
+  redação, tudo passa a cair em `NAO_RECONHECIDO` — corretamente, sem status errado — mas a
+  única pista é um WARN por execução. Como a consequência é silenciosa (os projetos simplesmente
+  param de ser aprovados sozinhos, como se o e-mail não tivesse chegado), isto pode durar dias.
+  A saída é o item acima, ou um aviso quando a proporção de não reconhecidos passar de um limite.
+- **Nome e cidade do cliente vêm de uma convenção de nome, não de campos.** Não existe campo de
+  cidade na API do Nectar, e o campo de nome do cliente costuma trazer o título inteiro da
+  oportunidade — os dois saem do padrão `CLIENTE_CIDADE_VENDEDOR_...` (seção 9). Valeu para todas
+  as oportunidades conferidas, mas é convenção digitada por gente: quando o nome usa `_` para
+  outra coisa, a segunda posição é uma palavra qualquer e não há como saber que não é cidade
+  (`Proposta_Comercial_CONECTSOL` → cidade "Comercial"). Cidade errada não decide nada no fluxo —
+  só aparece nas listagens — e a analista corrige na triagem, que agora mostra o selo "CRM"
+  justamente para ela saber de onde o dado veio. A correção de raiz é no Nectar: padronizar o
+  campo de nome do cliente elimina a heurística.
+- **Um cliente do CRM com vários negócios vira vários clientes no SolarSync.** Confirmado pelo
+  usuário como o comportamento desejado: JOSE NERI tem quatro oportunidades ("PROJETO 2" a
+  "PROJETO 5") e entra quatro vezes. O efeito colateral é o mesmo nome repetido na lista de
+  clientes, sem nada que distinga as quatro linhas além do id — quem precisar saber qual é qual
+  tem de abrir o negócio no Nectar pelo `nectarOportunidadeId`.
+- **Vendedor fora da lista entra vazio, e ninguém é avisado na tela.** A importação real deixou
+  5 dos 20 clientes sem vendedor, porque o "responsável" no Nectar era do administrativo ou um
+  vendedor que não está na lista ("Zenildo"). O único aviso é um WARN por execução. Acrescentar o
+  vendedor em `src/main/resources/referencia/vendedores.txt` exige deploy — é o que mais pesa a
+  favor de essa lista virar tabela.
+- **Nenhum job é testado ligado.** `NectarClient`, `GmailClient` e os dois jobs são beans
+  `@ConditionalOnProperty`: com `ativo=false`, que é o padrão e o que os testes forçam, esses
+  beans **não existem** e nenhum teste os toca. Foi assim que a falta do bean
+  `RestClient.Builder` passou por 174 testes verdes e só apareceu ao subir a aplicação com a
+  integração ligada (seção 6). Depois de mexer nos clientes ou nos jobs, subir com
+  `SOLARSYNC_NECTAR_ATIVO=true` é a única prova.
+- **`email_coelba` fica órfã ao excluir projeto**, pela mesma razão e com o mesmo efeito de
+  `historico_status`: sem FK em `projeto_id` de propósito, porque a FK faria `DELETE` de projeto
+  falhar com 409 por causa da trilha da integração.
+- **A integração só enxerga o retorno que chegou na caixa certa, e nem todo chega.** O e-mail de
+  aprovação conferido em 19/09/2026 foi endereçado a `projetos.conectsolparaatodos` — com o "a"
+  dobrado, erro de digitação do projetista ao cadastrar a solicitação no portal da Neoenergia. O
+  endereço real é `projetos.conectsolparatodos@gmail.com`. Consequência: o projeto cujo cadastro
+  no portal tem o endereço errado **nunca** terá o status aplicado sozinho, e não há como o
+  sistema saber disso — não existe e-mail para não reconhecer. A correção é no portal, projeto a
+  projeto; aqui o sintoma é projeto parado em `ENCAMINHADO` sem nada em `email_coelba`. Vale
+  conferir os `ENCAMINHADO` antigos à mão de tempos em tempos, ou tratar o endereço da
+  notificação como item de conferência ao enviar o projeto.
 
 ## 12. Decisões em aberto com o usuário
 
@@ -699,12 +1165,40 @@ Levantadas e ainda sem resposta ao fim da sessão de 03–04/09/2026:
    crescente/decrescente por coluna em todas as listagens; e a limpeza da interface (ordem da
    sidebar com Débitos logo após Clientes, fim dos rótulos "Etapa N", fim das referências à
    planilha antiga, título do site só "ConectSol")
-9. **Próximo**: script de importação da planilha `PLANILHA_TESTE_-_PROJETOS_.xlsx` (usar
-   `POST /api/projetos/{id}/corrigir-status` para os registros que chegam fora de ordem, e a
-   data de consulta/solicitação nos módulos que aceitam data retroativa, para as métricas não
-   nascerem zeradas, e registrar as consultas de débito dos dois tipos, que agora são exigidas
-   para resolver pendência e encaminhar projeto)
-10. Antes de ir ao ar: rate limit no `/api/auth/login` (item 11 do checklist — sem ele o BCrypt
-   é vetor de DoS), HTTPS/TLS (item 12) e a auditoria de segurança (item 10)
-11. Integrações da seção 9 (Nectar, Gmail) — o `numero_solicitacao` do Projeto é a chave que a
-    leitura do e-mail da Coelba vai usar para casar o retorno com o registro
+9. ~~Integrações de entrada da seção 9 (17/09/2026)~~ — **feito**: recebimento de clientes pelo
+   Nectar (polling a cada 10 min, cria só o Cliente na fila da triagem, idempotente por
+   `nectar_oportunidade_id`) e retorno de aprova/reprova da Coelba pelo Gmail (leitura a cada
+   15 min, casamento pelo `numero_solicitacao`, aplicação automática do status com trilha em
+   `email_coelba`). As duas desligadas por padrão. O `numero_solicitacao` do Projeto, criado
+   pensando nisto na V12, foi de fato a chave do casamento
+10. ~~Conferir o contrato do Nectar contra a API real~~ — **feito** (17/09/2026): mapeamento
+    reescrito sobre a resposta de verdade, as duas etapas de entrada confirmadas, o filtro
+    `pipeline` descoberto e a falta do bean `RestClient.Builder` corrigida. Detalhes na seção 9
+11. ~~Pendência com um único status ativo (19/09/2026)~~ — **feito**: `EM_ANDAMENTO`, o endpoint
+    `/iniciar` e o botão "play" da tela saíram; apontar a pendência na triagem já é iniciá-la
+    (V14, seção 3). Veio do uso real: o clique parecia ligar o relógio e não ligava nada
+12. ~~Modo conferência do Gmail (19/09/2026)~~ — **feito**:
+    `solarsync.gmail.somente-conferencia` (V15, seção 9). Era a peça que faltava para o item
+    abaixo ser seguro: sem ela, "conferir antes de ligar" só era possível depois de a
+    integração já ter aplicado um status
+13. ~~Conferir a redação real do e-mail da Coelba (19/09/2026)~~ — **feito**: três e-mails de
+    verdade fornecidos pelo usuário, e o parser **reescrito** sobre eles. O desenho anterior
+    (termos como `deferid`/`indeferid` no corpo) estava errado: o resultado vem da linha
+    `Etapa atual`, e nenhuma daquelas palavras existe no e-mail. A consulta padrão do Gmail
+    também não casava com o remetente. Detalhes na seção 9, e os e-mails colados em
+    `EmailRealDaNeoenergiaTest`
+14. **Próximo, e bloqueante para ligar o Gmail**: criar o cliente OAuth no Google Cloud, ligar em
+    modo conferência apontado para a caixa que recebe o e-mail e conferir `email_coelba` —
+    `CONFERENCIA` diz o que teria acontecido, `NAO_RECONHECIDO` denuncia uma etapa que as listas
+    ainda não conhecem. Só então `somente-conferencia=false`
+11. **Próximo**: script de importação da planilha `PLANILHA_TESTE_-_PROJETOS_.xlsx` (usar
+    `POST /api/projetos/{id}/corrigir-status` para os registros que chegam fora de ordem, e a
+    data de consulta/solicitação nos módulos que aceitam data retroativa, para as métricas não
+    nascerem zeradas, e registrar as consultas de débito dos dois tipos, que agora são exigidas
+    para resolver pendência e encaminhar projeto)
+13. Antes de ir ao ar: rate limit no `/api/auth/login` (item 11 do checklist — sem ele o BCrypt
+    é vetor de DoS), HTTPS/TLS (item 12) e a auditoria de segurança (item 10)
+13. Integração de **saída** para o Nectar (refletir status de volta ao comercial) — a única da
+    seção 9 que falta, e a que o desenho de eventos deixa mais barata: um
+    `@TransactionalEventListener(AFTER_COMMIT)` sobre `EntidadeStatusEvent`, sem tocar em
+    `pendencia`/`projeto`. ⚠️ Cair na armadilha do `AFTER_COMMIT` da seção 3 se escrever no banco

@@ -19,24 +19,28 @@ class StatusPendenciaTest {
     }
 
     @Test
-    void abertaPodeAndarResolverOuCancelar() {
+    void abertaPodeResolverOuCancelar() {
         assertThat(destinosPermitidos(StatusPendencia.ABERTA))
-                .containsExactlyInAnyOrder(StatusPendencia.EM_ANDAMENTO,
-                        StatusPendencia.RESOLVIDA, StatusPendencia.CANCELADA);
-    }
-
-    @Test
-    void emAndamentoPodeVoltarResolverOuCancelar() {
-        assertThat(destinosPermitidos(StatusPendencia.EM_ANDAMENTO))
-                .containsExactlyInAnyOrder(StatusPendencia.ABERTA,
-                        StatusPendencia.RESOLVIDA, StatusPendencia.CANCELADA);
+                .containsExactlyInAnyOrder(StatusPendencia.RESOLVIDA, StatusPendencia.CANCELADA);
     }
 
     @Test
     void resolvidaPodeSerReaberta() {
         // Seguro: criarOuAtivarProjetoParaCliente não duplica projeto ao re-resolver.
         assertThat(destinosPermitidos(StatusPendencia.RESOLVIDA))
-                .containsExactlyInAnyOrder(StatusPendencia.ABERTA, StatusPendencia.EM_ANDAMENTO);
+                .containsExactly(StatusPendencia.ABERTA);
+    }
+
+    /**
+     * Existe um único estado ativo: apontar a pendência na triagem já é iniciá-la. Se alguém
+     * reintroduzir um "EM_ANDAMENTO", este teste é o que acusa — e a pergunta a fazer é qual
+     * decisão ele tomaria que ABERTA não toma.
+     */
+    @Test
+    void temApenasUmStatusAtivo() {
+        assertThat(StatusPendencia.values())
+                .containsExactly(StatusPendencia.ABERTA, StatusPendencia.RESOLVIDA,
+                        StatusPendencia.CANCELADA);
     }
 
     @Test
