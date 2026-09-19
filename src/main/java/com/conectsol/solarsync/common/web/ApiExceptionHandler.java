@@ -24,6 +24,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
 import com.conectsol.solarsync.common.exception.CredenciaisInvalidasException;
 import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
+import com.conectsol.solarsync.common.exception.LimiteDeTentativasException;
 import com.conectsol.solarsync.common.exception.NumeroSolicitacaoObrigatorioException;
 import com.conectsol.solarsync.common.exception.ProjetoSemInstalacaoException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
@@ -93,6 +94,21 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     ProblemDetail numeroSolicitacaoObrigatorio(NumeroSolicitacaoObrigatorioException excecao) {
         return problema(HttpStatus.CONFLICT, "NUMERO_SOLICITACAO_OBRIGATORIO",
                 excecao.getMessage());
+    }
+
+    /**
+     * 429 com {@code Retry-After} em segundos, como manda o RFC 9110 — é o cabeçalho que diz ao
+     * frontend (e a um cliente automatizado) quando vale a pena tentar de novo, em vez de
+     * insistir e prolongar o bloqueio.
+     */
+    @ExceptionHandler(LimiteDeTentativasException.class)
+    ResponseEntity<ProblemDetail> limiteDeTentativas(LimiteDeTentativasException excecao) {
+        ProblemDetail corpo = problema(HttpStatus.TOO_MANY_REQUESTS, "LIMITE_DE_TENTATIVAS",
+                excecao.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER,
+                        String.valueOf(Math.max(1, excecao.getEsperar().toSeconds())))
+                .body(corpo);
     }
 
     @ExceptionHandler(CredenciaisInvalidasException.class)

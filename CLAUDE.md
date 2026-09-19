@@ -588,7 +588,7 @@ uma única empresa (ConectSol), não SaaS multi-cliente. Isso muda a prioridade 
 | 8 | Botão de reportar problema | **Sim, recomendado** | Útil dado que analistas vão operar o sistema diariamente — botão de feedback com captura de tela/contexto ajuda a substituir o "manda áudio de 3 minutos" |
 | 9 | Testes automáticos | **Sim, obrigatório** | Crítico especificamente para a regra de integração entre etapas (seção 3: pendência resolvida → cria projeto automaticamente) e para o cálculo das métricas do dashboard — são os dois pontos onde um bug silencioso derruba a confiança do gestor no sistema |
 | 10 | Auditoria de segurança | **Sim, antes de ir ao ar** | Sistema guarda dado de cliente final (nome, débito, projeto) — mesmo sendo uso interno, uma auditoria básica (dependências desatualizadas, endpoints sem autenticação, RBAC sem furo) antes do deploy no VPS Contabo é razoável |
-| 11 | WAF / rate limiting | **Sim** | VPS Contabo expõe a aplicação à internet — recomentélo Cloudflare (gratuito) na frente, rate limit no endpoint de login |
+| 11 | WAF / rate limiting | **Rate limit feito; WAF pendente** | `ControleDeTentativasDeLogin` (19/09/2026) — ver abaixo. Falta o Cloudflare (gratuito) na frente do VPS Contabo |
 | 12 | HTTPS/TLS | **Sim, obrigatório** | Certificado (Let's Encrypt) + redirecionamento forçado HTTPS no domínio usado no VPS Contabo |
 
 **Resumo prático**: dos 12, os itens 4 e 7 não se aplicam no sentido original (são pensados pra
@@ -990,6 +990,45 @@ As migrations `V3__seed_admin.sql` e `V4__unique_email_lower.sql` ainda citam o 
 comentários. Ficaram como estão de propósito: editar migration já aplicada quebra o checksum do
 Flyway, e o comentário virou contexto histórico, não instrução.
 
+### Limite de tentativas no login (19/09/2026)
+
+O `/api/auth/login` é público e chama BCrypt, que é caro **de propósito** — é o que torna um
+vazamento de hashes difícil de explorar. Sem limite, essa mesma lentidão vira o ataque: algumas
+centenas de requisições por segundo ocupam todas as threads do servidor com hash de senha e o
+sistema inteiro para, **sem que ninguém tenha adivinhado senha nenhuma**. Em segundo lugar, o
+limite encarece adivinhar a senha de uma conta específica.
+
+`ControleDeTentativasDeLogin` conta falhas em **duas chaves**, com limites diferentes:
+
+| Chave | Padrão | Por quê |
+|---|---|---|
+| e-mail | 10 / 15 min | protege a conta de quem troca de origem a cada tentativa |
+| origem | 60 / 15 min | **folgado de propósito**: a ConectSol inteira sai por um IP só, e um limite apertado trancaria o escritório porque uma pessoa errou a senha |
+
+- **Fica no controller, não no service** — ao contrário de todas as outras guardas do projeto. A
+  exceção se justifica porque esta não é regra de negócio: ela se apoia no IP de quem chamou,
+  que é informação de transporte e não existe fora do HTTP. Quem decide se a senha confere
+  continua sendo só o `LoginSenhaService`.
+- **Recusa antes de chamar o service.** Passar pelo BCrypt para só depois recusar gastaria
+  exatamente o recurso que o limite existe para proteger.
+- **Acerto zera o contador do e-mail e não o da origem**, e a assimetria é deliberada: quem
+  acertou provou ser dono daquela conta, mas não provou nada sobre a origem — que pode ser um
+  atacante varrendo contas e que acertou uma. Zerar ali devolveria a janela inteira a cada
+  acerto.
+- **429 com `Retry-After`**, não 401: a requisição nem chegou a ser avaliada, e dizer
+  "credenciais inválidas" confundiria justamente quem errou a senha e tenta entender por que não
+  entra. Código `LIMITE_DE_TENTATIVAS`.
+- ⚠️ **`solarsync.login.confiar-em-proxy` só depois do Cloudflare.** Ligado, o IP vem de
+  `X-Forwarded-For`; sem um proxy de verdade na frente, qualquer um forja o cabeçalho e troca de
+  origem a cada requisição, e o limite por origem deixa de existir. Desligado atrás de um proxy,
+  o IP é sempre o do proxy e o limite vira global. Os dois erros são silenciosos — daí a
+  propriedade existir em vez de o código adivinhar.
+
+**Em memória**, num mapa: o SolarSync roda numa instância só. Não sobrevive a restart e não é
+compartilhado entre instâncias (seção 11). Redis ou tabela acrescentariam infraestrutura para um
+sistema de uma empresa só, e o restart só devolve ao atacante a janela que ele teria em quinze
+minutos.
+
 **Revogação de acesso é `usuario.ativo = false`** (`POST /api/usuarios/{id}/desativar`), não
 exclusão: o access token morre em ≤15 min e a renovação passa a ser negada, preservando a
 auditoria. Não há logout no servidor (a API é stateless; o cliente descarta os tokens).
@@ -1072,8 +1111,10 @@ Coisas que funcionam como projetado, mas cujo efeito colateral vale ter em vista
   Swagger, e com a remoção do login Google isso deixou de ser aceitável — virou o módulo
   Usuários & Acesso. Ao fechar um módulo, conferir se ele tem caminho pela tela, não só rota no
   contrato.
-- **Sem rate limit no login** (item 11 do checklist): BCrypt é caro de propósito, e endpoint
-  público sem limite é vetor de negação de serviço. Bloqueante para ir ao ar.
+- **O limite de tentativas do login vive em memória** e some no restart — reiniciar a aplicação
+  devolve ao atacante a janela inteira. Também não é compartilhado entre instâncias, então o dia
+  em que houver duas o limite efetivo dobra. Aceito enquanto for uma instância só num VPS; a
+  saída, se mudar, é Redis ou uma tabela, não um contador maior.
 - **Mensagem de erro de login não distingue API fora do ar de senha errada.** O `fetch` lança
   `TypeError` quando não alcança o servidor, e o `AuthContext` do frontend trata no `catch`
   genérico — a tela diz "credenciais inválidas" quando o backend está desligado. Confunde, e é

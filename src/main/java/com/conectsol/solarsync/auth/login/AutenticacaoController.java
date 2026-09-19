@@ -10,12 +10,14 @@ import com.conectsol.solarsync.auth.dto.LoginSenhaRequest;
 import com.conectsol.solarsync.auth.dto.RefreshRequest;
 import com.conectsol.solarsync.auth.dto.TokenResponse;
 import com.conectsol.solarsync.auth.dto.UsuarioLogadoResponse;
+import com.conectsol.solarsync.common.exception.CredenciaisInvalidasException;
 import com.conectsol.solarsync.common.security.Autenticado;
 import com.conectsol.solarsync.common.security.UsuarioAutenticado;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -34,13 +36,38 @@ public class AutenticacaoController {
 
     private final LoginSenhaService loginSenhaService;
     private final RenovacaoTokenService renovacaoTokenService;
+    private final ControleDeTentativasDeLogin controleDeTentativas;
 
+    /**
+     * O limite de tentativas é aplicado <b>aqui</b>, e não dentro do
+     * {@link LoginSenhaService}, ao contrário das outras guardas do projeto (que moram no
+     * service para valerem em qualquer origem). O motivo é que esta não é regra de negócio: ela
+     * se apoia no IP de quem chamou, que é informação de transporte e não existe fora do HTTP.
+     * O service segue sendo o único a decidir se a senha confere.
+     * <p>
+     * A ordem importa: verificar → autenticar → contar. Recusar antes de chamar o service é o que
+     * poupa o BCrypt, que é o recurso que o limite existe para proteger.
+     */
     @PostMapping("/login")
     @Operation(summary = "Login com e-mail e senha")
     @ApiResponse(responseCode = "200", description = "Tokens emitidos")
     @ApiResponse(responseCode = "401", description = "Credenciais inválidas")
-    public TokenResponse login(@RequestBody @Valid LoginSenhaRequest requisicao) {
-        return loginSenhaService.autenticar(requisicao.email(), requisicao.senha());
+    @ApiResponse(responseCode = "429", description = "Tentativas demais; veja Retry-After")
+    public TokenResponse login(@RequestBody @Valid LoginSenhaRequest requisicao,
+            HttpServletRequest http) {
+
+        String origem = controleDeTentativas.origemDe(http);
+        controleDeTentativas.verificar(origem, requisicao.email());
+
+        try {
+            TokenResponse resposta =
+                    loginSenhaService.autenticar(requisicao.email(), requisicao.senha());
+            controleDeTentativas.acertou(requisicao.email());
+            return resposta;
+        } catch (CredenciaisInvalidasException recusado) {
+            controleDeTentativas.falhou(origem, requisicao.email());
+            throw recusado;
+        }
     }
 
     @PostMapping("/refresh")

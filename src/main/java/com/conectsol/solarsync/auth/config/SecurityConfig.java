@@ -25,10 +25,11 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import com.conectsol.solarsync.auth.jwt.TokenService;
+import com.conectsol.solarsync.auth.login.LoginRateLimitProperties;
 
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties(CorsProperties.class)
+@EnableConfigurationProperties({ CorsProperties.class, LoginRateLimitProperties.class })
 public class SecurityConfig {
 
     @Bean
