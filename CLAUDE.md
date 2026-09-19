@@ -1187,18 +1187,32 @@ Levantadas e ainda sem resposta ao fim da sessão de 03–04/09/2026:
     `Etapa atual`, e nenhuma daquelas palavras existe no e-mail. A consulta padrão do Gmail
     também não casava com o remetente. Detalhes na seção 9, e os e-mails colados em
     `EmailRealDaNeoenergiaTest`
-14. **Próximo, e bloqueante para ligar o Gmail**: criar o cliente OAuth no Google Cloud, ligar em
-    modo conferência apontado para a caixa que recebe o e-mail e conferir `email_coelba` —
-    `CONFERENCIA` diz o que teria acontecido, `NAO_RECONHECIDO` denuncia uma etapa que as listas
-    ainda não conhecem. Só então `somente-conferencia=false`
-11. **Próximo**: script de importação da planilha `PLANILHA_TESTE_-_PROJETOS_.xlsx` (usar
+14. ~~Ensaio do Gmail contra a caixa real (19/09/2026)~~ — **feito**: cliente OAuth criado
+    (tipo "Aplicativo para computador", app Externo publicado — em modo Teste o refresh token
+    morreria em 7 dias), `scripts/obter-refresh-token-gmail.ps1`, e duas execuções em modo
+    conferência contra `projetos.conectsolparatodos@gmail.com`. **117 e-mails lidos, 107
+    entendidos, zero `NAO_RECONHECIDO`, nenhum status alterado** — 55 acompanhamentos, 36
+    vistorias solicitadas, 13 aprovações, 3 vistorias aprovadas. O que sobrou de
+    `SEM_CORRESPONDENCIA` é o item 15
+15. **Próximo, e o que trava a integração do Gmail valer alguma coisa**: não há projetos com
+    `numero_solicitacao` no banco para o e-mail casar. O parser está certo e não tem o que
+    aplicar. Os números saem da **importação da planilha** ou do uso real do sistema — até lá,
+    todo e-mail cai em `SEM_CORRESPONDENCIA`, corretamente
+16. **Importação da planilha** `PLANILHA_TESTE_-_PROJETOS_.xlsx` (usar
     `POST /api/projetos/{id}/corrigir-status` para os registros que chegam fora de ordem, e a
     data de consulta/solicitação nos módulos que aceitam data retroativa, para as métricas não
     nascerem zeradas, e registrar as consultas de débito dos dois tipos, que agora são exigidas
-    para resolver pendência e encaminhar projeto)
-13. Antes de ir ao ar: rate limit no `/api/auth/login` (item 11 do checklist — sem ele o BCrypt
+    para resolver pendência e encaminhar projeto). ⚠️ **Trazer o `numero_solicitacao`** de cada
+    projeto já enviado: é a chave que liga o e-mail ao registro, e sem ela a integração do Gmail
+    fica sem efeito para toda a carteira atual
+17. **Ligar o Gmail para valer**, depois do item 16: conferir `email_coelba` com dados reais,
+    `somente-conferencia=false` e `somente-projetos-conhecidos=true`
+18. Antes de ir ao ar: rate limit no `/api/auth/login` (item 11 do checklist — sem ele o BCrypt
     é vetor de DoS), HTTPS/TLS (item 12) e a auditoria de segurança (item 10)
-13. Integração de **saída** para o Nectar (refletir status de volta ao comercial) — a única da
+19. Integração de **saída** para o Nectar (refletir status de volta ao comercial) — a única da
     seção 9 que falta, e a que o desenho de eventos deixa mais barata: um
     `@TransactionalEventListener(AFTER_COMMIT)` sobre `EntidadeStatusEvent`, sem tocar em
     `pendencia`/`projeto`. ⚠️ Cair na armadilha do `AFTER_COMMIT` da seção 3 se escrever no banco
+20. Listagem só-leitura de `email_coelba`, filtrada por `resultado` — hoje a trilha existe e
+    ninguém tem como olhar sem acesso ao banco (seção 11). Vira urgente no dia em que alguém
+    perguntar "por que este projeto foi reprovado ontem"
