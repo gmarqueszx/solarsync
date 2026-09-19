@@ -1115,10 +1115,10 @@ Coisas que funcionam como projetado, mas cujo efeito colateral vale ter em vista
   devolve ao atacante a janela inteira. Também não é compartilhado entre instâncias, então o dia
   em que houver duas o limite efetivo dobra. Aceito enquanto for uma instância só num VPS; a
   saída, se mudar, é Redis ou uma tabela, não um contador maior.
-- **Mensagem de erro de login não distingue API fora do ar de senha errada.** O `fetch` lança
-  `TypeError` quando não alcança o servidor, e o `AuthContext` do frontend trata no `catch`
-  genérico — a tela diz "credenciais inválidas" quando o backend está desligado. Confunde, e é
-  simples de separar.
+- ~~Mensagem de erro de login não distingue API fora do ar de senha errada~~ — **fechado em
+  19/09/2026**: o `client.ts` do frontend converte a falha de `fetch` em `ApiError` com
+  `codigo: SEM_CONEXAO`, e vale para todas as telas, não só a de login. Junto entrou o
+  tratamento do 429 do limite de tentativas, com contagem regressiva a partir do `Retry-After`.
 - **`email_coelba` não tem tela** (decisão do usuário em 17/09/2026: "nenhuma tela; só log do
   servidor"). É a mesma armadilha do item acima, invertida: os dados existem e ninguém tem como
   olhar sem acesso ao banco. Vale enquanto só o João Gabriel diagnostica; no dia em que a Nycole

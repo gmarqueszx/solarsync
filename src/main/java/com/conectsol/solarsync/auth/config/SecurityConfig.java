@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -83,8 +84,9 @@ public class SecurityConfig {
     }
 
     /**
-     * Força 10 (default). Não subir enquanto não houver rate limit no login (checklist item 11
-     * do CLAUDE.md): hash caro em endpoint público e sem limite é vetor de negação de serviço.
+     * Força 10 (default). Subir o custo só faz sentido agora que existe limite de tentativas
+     * (`ControleDeTentativasDeLogin`, item 11 do checklist): hash caro em endpoint público e sem
+     * limite é vetor de negação de serviço, e aumentar o fator sem o limite pioraria o ataque.
      */
     @Bean
     PasswordEncoder passwordEncoder() {
@@ -99,6 +101,16 @@ public class SecurityConfig {
                 List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuracao.setAllowedHeaders(List.of("*"));
         configuracao.setAllowCredentials(true);
+
+        // ⚠️ `allowedHeaders("*")` vale para o que o navegador ENVIA. Para o que ele deixa o
+        // JavaScript LER da resposta, a lista é outra e é curtíssima por padrão — Retry-After não
+        // está nela, então `resposta.headers.get('Retry-After')` devolvia null no navegador
+        // mesmo com o servidor mandando o cabeçalho. O frontend caía de volta na mensagem
+        // genérica e a contagem regressiva do login bloqueado nunca aparecia.
+        //
+        // Descoberto testando na interface de verdade em 19/09/2026; nenhum teste de backend
+        // pegaria, porque CORS é regra do navegador e o MockMvc não a aplica.
+        configuracao.setExposedHeaders(List.of(HttpHeaders.RETRY_AFTER));
 
         UrlBasedCorsConfigurationSource fonte = new UrlBasedCorsConfigurationSource();
         fonte.registerCorsConfiguration("/**", configuracao);
