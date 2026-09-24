@@ -21,7 +21,9 @@ import com.conectsol.solarsync.auth.UsuarioRepository;
 import com.conectsol.solarsync.cliente.ClienteRepository;
 import com.conectsol.solarsync.cliente.ClienteService;
 import com.conectsol.solarsync.cliente.dto.ClienteFiltro;
+import com.conectsol.solarsync.cliente.MotivoPrioridade;
 import com.conectsol.solarsync.cliente.dto.ClienteRequest;
+import com.conectsol.solarsync.cliente.dto.PrioridadeRequest;
 import com.conectsol.solarsync.debito.DebitoService;
 import com.conectsol.solarsync.debito.StatusDebito;
 import com.conectsol.solarsync.debito.TipoDebito;
@@ -107,7 +109,7 @@ public class DadosDeExemplo implements ApplicationRunner {
         // 1. Fila da triagem: ninguém checou a Coelba para estes clientes ainda. Alimenta a
         //    métrica de tempo sem interação e é a lista de trabalho da etapa 1.
         clienteService.criar(new ClienteRequest("Ana Paula Rocha (exemplo)", "Salvador",
-                "Vendedor Bruno", hojeMenos(3), "3001234501", "(71) 99100-0001"));
+                "Vendedor Bruno", hojeMenos(3), "3001234501", "(71) 99100-0001", false, false));
         criarCliente("Hélio Santana (exemplo)", "Lauro de Freitas", 6);
         criarCliente("Vera Lúcia Pinto (exemplo)", "Salvador", 9);
 
@@ -116,13 +118,13 @@ public class DadosDeExemplo implements ApplicationRunner {
         pendenciaService.criar(new PendenciaCriarRequest(semAcao, TipoPendencia.LIGACAO_NOVA,
                 instanteMenos(10), ivan, "Aguardando vistoria de ligação nova"), admin);
 
-        // 3. Pendência em andamento.
-        Long emAndamento = criarCliente("Fernanda Souza (exemplo)", "Camaçari", 20);
-        var pendenciaEmAndamento = pendenciaService.criar(new PendenciaCriarRequest(emAndamento,
+        // 3. Pendência aberta há mais tempo, já com protocolo na Coelba. Não existe status
+        //    "em andamento": apontar a pendência já é iniciá-la, e o que conta o tempo é
+        //    solicitadoEm. O andamento vive na observação e no histórico.
+        Long comProtocolo = criarCliente("Fernanda Souza (exemplo)", "Camaçari", 20);
+        pendenciaService.criar(new PendenciaCriarRequest(comProtocolo,
                 TipoPendencia.TROCA_TITULARIDADE, instanteMenos(18), larissa,
-                "Documentação enviada à Coelba"), admin);
-        pendenciaService.atualizarStatus(pendenciaEmAndamento.getId(),
-                StatusPendencia.EM_ANDAMENTO, ivan, "Protocolo aberto na Coelba");
+                "Documentação enviada à Coelba; protocolo aberto"), admin);
 
         // 4. Pendência cancelada — cliente desistiu.
         Long cancelado = criarCliente("Roberto Alves (exemplo)", "Salvador", 30);
@@ -183,7 +185,10 @@ public class DadosDeExemplo implements ApplicationRunner {
                 "2026-COE-004655", larissa);
         projetoService.reprovar(projetoAprovado.getId(), "Divergência na potência declarada",
                 larissa);
-        projetoService.reencaminhar(projetoAprovado.getId(), hojeMenos(70), null, larissa);
+        // O reenvio recebeu outro número da Coelba — é o caso que o campo obrigatório no
+        // reencaminhar existe para capturar.
+        projetoService.reencaminhar(projetoAprovado.getId(), hojeMenos(70), "2026-COE-005301",
+                larissa);
         projetoService.aprovar(projetoAprovado.getId(), hojeMenos(62), larissa);
 
         // 11. Aprovado e instalado, esperando vistoria: a fila de trabalho da etapa 4.
@@ -264,12 +269,61 @@ public class DadosDeExemplo implements ApplicationRunner {
         unificacaoService.solicitarDesligamento(unificacaoComOs.getId(), hojeMenos(45), admin);
         unificacaoService.abrirOrdemDeServico(unificacaoComOs.getId(), admin);
 
+        // 16. Prioridade por instalação adiantada: a usina já está montada e a homologação
+        //     corre atrás. Aparece no topo da fila de Projetos, e a data informada aqui desce
+        //     para o projeto — é ela que destrava a solicitação da vistoria lá na frente.
+        Long prioritarioInstalado = criarCliente("Joana Vilela (exemplo)", "Brumado", 25);
+        clienteService.marcarPrioridade(prioritarioInstalado,
+                new PrioridadeRequest(MotivoPrioridade.INSTALACAO_ADIANTADA,
+                        "Equipe já montou a usina; cliente cobrando a homologação",
+                        hojeMenos(4)),
+                admin);
+        consultar(prioritarioInstalado, TipoDebito.PENDENCIA, StatusDebito.QUITADO, 24, camila);
+        var pendenciaPrioritaria = pendenciaService.criar(new PendenciaCriarRequest(
+                prioritarioInstalado, TipoPendencia.MUDANCA_PADRAO, instanteMenos(24), camila,
+                "Padrão trocado; aguardando a Coelba"), admin);
+        pendenciaService.atualizarStatus(pendenciaPrioritaria.getId(), StatusPendencia.RESOLVIDA,
+                admin);
+
+        // 17. Prioridade por prazo de contrato: sem data de instalação, porque o motivo não é a
+        //     instalação. Sobe ao topo da triagem, que é onde ele está.
+        Long prioritarioPrazo = criarCliente("Escola Semente (exemplo)", "Vitória da Conquista", 5);
+        clienteService.marcarPrioridade(prioritarioPrazo,
+                new PrioridadeRequest(MotivoPrioridade.PRAZO_CONTRATUAL,
+                        "Contrato prevê homologação em 30 dias", null),
+                admin);
+
+        // 18. Cliente avulso do gestor: só a pendência, e o fluxo acaba quando ela é resolvida.
+        //     Nenhum projeto nasce — é o que distingue este caso do item 2.
+        Long avulso = criarCliente("Padaria Trigo de Ouro (exemplo)", "Salvador", 8, true, false);
+        consultar(avulso, TipoDebito.PENDENCIA, StatusDebito.QUITADO, 7, camila);
+        var pendenciaAvulsa = pendenciaService.criar(new PendenciaCriarRequest(avulso,
+                TipoPendencia.REGULARIZACAO_CADASTRAL, instanteMenos(7), camila,
+                "Gestor pediu só a regularização cadastral"), admin);
+        pendenciaService.atualizarStatus(pendenciaAvulsa.getId(), StatusPendencia.RESOLVIDA, admin);
+
+        // 19. Cliente avulso ainda com a pendência aberta, para a fila mostrar os dois estados.
+        Long avulsoAberto = criarCliente("Oficina Bom Motor (exemplo)", "Camaçari", 4, true, false);
+        pendenciaService.criar(new PendenciaCriarRequest(avulsoAberto,
+                TipoPendencia.DEBITO_VINCULADO, instanteMenos(3), camila,
+                "Débito de terceiro vinculado à UC"), admin);
+
+        // 20. Projeto Banco, com débito quitado mas próxima conta vencendo amanhã: encaminhar
+        //     responde 409 PROXIMO_DEBITO_A_VENCER. É o caso que a equipe levantou — quitado
+        //     hoje, devendo quando a Coelba for analisar.
+        Long banco = criarCliente("Marcos Queiroz (exemplo)", "Brumado", 30, false, true);
+        Projeto projetoBanco = projetoSemPendencia(banco, TipoProjeto.PROJETO_INICIAL, larissa,
+                hojeMenos(26), hojeMenos(24), "11.20", admin);
+        debitoService.registrarConsulta(banco, new DebitoRegistrarRequest(TipoDebito.HOMOLOGACAO,
+                StatusDebito.QUITADO, instanteMenos(2), hojeMenos(-1)), larissa);
+
         log.warn("Dados de exemplo semeados: {} clientes, {} projetos. "
                 + "Desabilite SOLARSYNC_DADOS_DE_EXEMPLO antes de usar este banco pra valer.",
                 clienteRepository.count(), projetoRepository.count());
         log.info("Projeto travado por débito: id {} | instalado sem vistoria: id {} | "
-                + "aprovado esperando instalação: id {}",
-                projetoTravado.getId(), projetoInstalado.getId(), projetoSemInstalacao.getId());
+                + "aprovado esperando instalação: id {} | Banco com próximo débito amanhã: id {}",
+                projetoTravado.getId(), projetoInstalado.getId(), projetoSemInstalacao.getId(),
+                projetoBanco.getId());
     }
 
     /**
@@ -280,7 +334,8 @@ public class DadosDeExemplo implements ApplicationRunner {
     private void consultar(Long clienteId, TipoDebito tipo, StatusDebito status, int diasAtras,
             Long usuarioId) {
         debitoService.registrarConsulta(clienteId,
-                new DebitoRegistrarRequest(tipo, status, instanteMenos(diasAtras)), usuarioId);
+                new DebitoRegistrarRequest(tipo, status, instanteMenos(diasAtras), null),
+                usuarioId);
     }
 
     /**
@@ -330,11 +385,16 @@ public class DadosDeExemplo implements ApplicationRunner {
 
     /** UC e telefone sintéticos, para as telas mostrarem os campos preenchidos. */
     private Long criarCliente(String nome, String cidade, int diasAtras) {
+        return criarCliente(nome, cidade, diasAtras, false, false);
+    }
+
+    private Long criarCliente(String nome, String cidade, int diasAtras, boolean somentePendencia,
+            boolean banco) {
         String uc = "30012345%02d".formatted(sequencialUc);
         String telefone = "(71) 99100-%04d".formatted(sequencialUc);
         sequencialUc++;
-        return clienteService.criar(new ClienteRequest(
-                nome, cidade, "Vendedor Bruno", hojeMenos(diasAtras), uc, telefone)).id();
+        return clienteService.criar(new ClienteRequest(nome, cidade, "Vendedor Bruno",
+                hojeMenos(diasAtras), uc, telefone, somentePendencia, banco)).id();
     }
 
     /**

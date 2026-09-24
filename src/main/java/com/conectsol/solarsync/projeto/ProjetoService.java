@@ -2,6 +2,7 @@ package com.conectsol.solarsync.projeto;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import org.springframework.context.ApplicationEventPublisher;
@@ -14,9 +15,14 @@ import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.auth.UsuarioRepository;
 import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
+import com.conectsol.solarsync.common.FusoDaOperacao;
 import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
+import com.conectsol.solarsync.common.exception.ClienteSomentePendenciaException;
 import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
+import com.conectsol.solarsync.common.exception.NumeroSolicitacaoObrigatorioException;
+import com.conectsol.solarsync.common.exception.ProximoDebitoAVencerException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
+import com.conectsol.solarsync.common.web.PrioridadePrimeiro;
 import com.conectsol.solarsync.debito.DebitoService;
 import com.conectsol.solarsync.debito.TipoDebito;
 import com.conectsol.solarsync.projeto.dto.ProjetoAtualizarRequest;
@@ -52,7 +58,8 @@ public class ProjetoService {
 
     @Transactional(readOnly = true)
     public Page<Projeto> listar(ProjetoFiltro filtro, Pageable paginacao) {
-        return projetoRepository.findAll(ProjetoSpecs.de(filtro), paginacao);
+        return projetoRepository.findAll(ProjetoSpecs.de(filtro),
+                PrioridadePrimeiro.aplicar(paginacao, "cliente.prioridade"));
     }
 
     @Transactional(readOnly = true)
@@ -65,22 +72,38 @@ public class ProjetoService {
      * cliente, a menos que já exista um projeto em andamento (RECEBIDO/AGUARDANDO_ENVIO)
      * para evitar duplicidade quando várias pendências do mesmo cliente são resolvidas.
      * O tipo começa como PROJETO_INICIAL e pode ser ajustado pelo analista responsável.
+     * <p>
+     * Devolve {@code null} para o cliente de fluxo curto ("somente pendência"): ali a resolução da
+     * pendência <b>encerra</b> o processo em vez de abrir o próximo. Como este é o único caminho
+     * automático de criação de projeto, a guarda aqui cobre os dois listeners de uma vez — o da
+     * pendência resolvida e o da triagem sem pendência — e cobriria também um terceiro que
+     * aparecesse depois.
      */
     @Transactional
     public Projeto criarOuAtivarProjetoParaCliente(Long clienteId, Long usuarioId) {
+        Cliente cliente = carregarCliente(clienteId);
+        if (cliente.isSomentePendencia()) {
+            return null;
+        }
         List<Projeto> projetosDoCliente = projetoRepository.findByClienteId(clienteId);
         return projetosDoCliente.stream()
                 .filter(projeto -> STATUS_EM_ANDAMENTO.contains(projeto.getStatus()))
                 .findFirst()
                 .orElseGet(() -> nascerRecebido(
-                        carregarCliente(clienteId), TipoProjeto.PROJETO_INICIAL, null,
+                        cliente, TipoProjeto.PROJETO_INICIAL, null,
                         LocalDate.now(), null, null, null, usuarioId));
     }
 
     @Transactional
     public Projeto criar(ProjetoCriarRequest requisicao, Long usuarioId) {
+        Cliente cliente = carregarCliente(requisicao.clienteId());
+        // Vale também para a criação à mão, e não só para a automática: senão o fluxo curto seria
+        // contornado pelo botão "Novo Projeto" sem ninguém notar que o cliente era avulso.
+        if (cliente.isSomentePendencia()) {
+            throw new ClienteSomentePendenciaException(cliente.getId());
+        }
         return nascerRecebido(
-                carregarCliente(requisicao.clienteId()),
+                cliente,
                 requisicao.tipoProjeto(),
                 resolverAnalista(requisicao.analistaResponsavelId()),
                 requisicao.dataRecebimento() == null ? LocalDate.now() : requisicao.dataRecebimento(),
@@ -97,7 +120,13 @@ public class ProjetoService {
         projeto.setAnalistaResponsavel(resolverAnalista(requisicao.analistaResponsavelId()));
         projeto.setDataRecebimento(requisicao.dataRecebimento());
         projeto.setDataArt(requisicao.dataArt());
-        projeto.setNumeroSolicitacao(requisicao.numeroSolicitacao());
+        // O PUT substitui o cadastro inteiro, mas o número da solicitação é a exceção: pode ser
+        // corrigido, nunca apagado. Sem isso, o número obrigatório no envio seria contornável
+        // por uma edição — e um projeto já enviado ficaria sem a chave que casa o retorno por
+        // e-mail com ele, silenciosamente.
+        if (requisicao.numeroSolicitacao() != null && !requisicao.numeroSolicitacao().isBlank()) {
+            projeto.setNumeroSolicitacao(requisicao.numeroSolicitacao().trim());
+        }
         projeto.setPotenciaKwp(requisicao.potenciaKwp());
         return projetoRepository.save(projeto);
     }
@@ -117,6 +146,31 @@ public class ProjetoService {
         Projeto projeto = carregar(id);
         projeto.setDataInstalacao(dataInstalacao);
         return projetoRepository.save(projeto);
+    }
+
+    /**
+     * Desce para o projeto do cliente a data de instalação declarada num pedido de prioridade por
+     * instalação adiantada. Chamado pelo {@code ClienteService} logo depois de gravar a prioridade.
+     * <p>
+     * É o que evita um segundo campo de data de instalação vivendo em paralelo: a partir daqui quem
+     * manda é {@code projeto.data_instalacao}, que é o campo que a etapa de vistoria já lê e exige
+     * — a prioridade só o alimenta.
+     * <p>
+     * <b>Não sobrescreve</b> data já registrada: quem instalou de fato e anotou na etapa de vistoria
+     * sabe mais que um pedido de prioridade que pode ser de semanas atrás. E não mexe em status: a
+     * instalação é evento de campo, não etapa da homologação.
+     */
+    @Transactional
+    public void registrarInstalacaoDeclaradaNaPrioridade(Long clienteId, LocalDate dataInstalacao) {
+        if (dataInstalacao == null) {
+            return;
+        }
+        projetoRepository.findByClienteId(clienteId).stream()
+                .filter(projeto -> projeto.getDataInstalacao() == null)
+                .forEach(projeto -> {
+                    projeto.setDataInstalacao(dataInstalacao);
+                    projetoRepository.save(projeto);
+                });
     }
 
     @Transactional
@@ -148,13 +202,25 @@ public class ProjetoService {
     }
 
     /**
-     * Só sobrescreve quando veio número. Reenviar sem informar número novo mantém o antigo —
-     * apagá-lo desligaria o projeto do e-mail da Coelba, que é justamente para o que ele serve.
+     * O número da solicitação é <b>obrigatório</b> para enviar à Coelba (decisão do usuário em
+     * 17/09/2026). A guarda fica aqui, e não só no {@code @NotBlank} do DTO, pela mesma razão da
+     * guarda de débito: vale também quando a origem for a importação da planilha ou uma
+     * integração, e não apenas a tela.
+     * <p>
+     * Sem o número, o projeto vai à Coelba sem a chave que casa o retorno por e-mail com ele
+     * (seção 9) — a automação da etapa 3 não teria como saber de que projeto o e-mail fala, e
+     * cairia em {@code SEM_CORRESPONDENCIA}. Era opcional antes, sob o argumento de que o
+     * retorno da Coelba às vezes demora; o que isso produzia era projeto enviado sem chave.
+     * <p>
+     * Vale também no reenvio: é justamente ali que a Coelba pode devolver outro número, e
+     * aceitar vazio manteria o número do ciclo anterior — pior que recusar, porque o e-mail novo
+     * casaria com um número velho.
      */
     private void aplicarNumeroSolicitacao(Projeto projeto, String numeroSolicitacao) {
-        if (numeroSolicitacao != null && !numeroSolicitacao.isBlank()) {
-            projeto.setNumeroSolicitacao(numeroSolicitacao.trim());
+        if (numeroSolicitacao == null || numeroSolicitacao.isBlank()) {
+            throw new NumeroSolicitacaoObrigatorioException();
         }
+        projeto.setNumeroSolicitacao(numeroSolicitacao.trim());
     }
 
     /**
@@ -180,6 +246,17 @@ public class ProjetoService {
         }
         if (debitoService.clienteTemDebitoAtivo(clienteId, TipoDebito.HOMOLOGACAO)) {
             throw new ClienteComDebitoException(clienteId, "encaminhar o projeto");
+        }
+
+        // Terceira recusa, e a que não se enxerga olhando só o status do débito: o cliente está
+        // quitado agora, mas a próxima conta vence em um dia ou menos. A Coelba não analisa o
+        // projeto no instante em que ele chega — quando analisar, o débito já existe e o projeto
+        // volta reprovado. Recusar aqui é mais barato que reenviar depois.
+        LocalDate naIminencia =
+                debitoService.proximoDebitoNaIminencia(clienteId, TipoDebito.HOMOLOGACAO);
+        if (naIminencia != null) {
+            throw new ProximoDebitoAVencerException(clienteId, naIminencia,
+                    ChronoUnit.DAYS.between(FusoDaOperacao.hoje(), naIminencia));
         }
     }
 
@@ -234,6 +311,11 @@ public class ProjetoService {
                 .dataArt(dataArt)
                 .numeroSolicitacao(numeroSolicitacao)
                 .potenciaKwp(potenciaKwp)
+                // A outra metade da propagação da prioridade por instalação adiantada: quando ela
+                // foi pedida na triagem, ainda não havia projeto para receber a data, e ela ficou
+                // esperando no cliente. O projeto nasce já sabendo dela, e a etapa de vistoria a
+                // encontra onde sempre a procurou.
+                .dataInstalacao(cliente.getPrioridadeDataInstalacao())
                 .build();
         Projeto salvo = projetoRepository.save(projeto);
 

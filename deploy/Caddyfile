@@ -1,0 +1,49 @@
+# Proxy reverso e terminação TLS da API do SolarSync (item 12 do checklist da seção 8).
+#
+# O Caddy pede e renova o certificado do Let's Encrypt sozinho, por isso ele está aqui no lugar
+# de nginx + certbot: o par que mais dá trabalho manter é justamente a renovação, e um
+# certificado vencido num domingo derruba o sistema inteiro.
+#
+# ⚠️ Para o certificado ser emitido, o domínio precisa apontar para o IP deste servidor e as
+# portas 80 e 443 precisam chegar até aqui. No Cloudflare, mantenha o registro como "DNS only"
+# (nuvem cinza) até o primeiro certificado sair.
+{
+	# Onde o Let's Encrypt avisa de problema de renovação. Sem isto o aviso não chega a ninguém.
+	email {$SOLARSYNC_ACME_EMAIL}
+}
+
+{$SOLARSYNC_API_DOMINIO} {
+	encode zstd gzip
+
+	# O /actuator/health existe para o healthcheck do container, que roda em localhost dentro do
+	# container da API e não passa por aqui. De fora não há motivo para alcançá-lo: ele confirma
+	# a existência do sistema e o estado do banco para quem só tem o domínio.
+	handle /actuator* {
+		respond 404
+	}
+
+	handle {
+		reverse_proxy api:8080 {
+			# O Caddy já preenche X-Forwarded-For com o IP de quem conectou. É desse cabeçalho
+			# que sai o limite de tentativas por origem (SOLARSYNC_LOGIN_CONFIAR_EM_PROXY=true
+			# no compose) — sem o proxy setando isso, o limite mediria o IP do container.
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	header {
+		# A API só deve ser alcançada por HTTPS. Um ano, sem subdomínios: o preload e o
+		# includeSubDomains ficam de fora enquanto conectsol.com servir outras coisas.
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		# Resposta de API nunca é renderizada em frame; e o frontend está noutro domínio.
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

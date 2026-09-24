@@ -1,0 +1,25 @@
+# O contexto de build só precisa do pom e de src/. Tudo o mais aqui ou é grande (target/,
+# node_modules), ou é segredo que não pode entrar em camada de imagem (config/, .env), ou é
+# irrelevante para compilar.
+
+.git
+.gitignore
+.gitattributes
+target/
+.mvn/
+mvnw
+mvnw.cmd
+
+# ⚠️ Segredo. config/application.properties tem senha de banco e token do Nectar em dev, e uma
+# camada de imagem é pública para quem tiver a imagem.
+config/
+.env
+.env.*
+!.env.example
+*.pem
+
+docs/
+scripts/
+deploy/
+CLAUDE.md
+HELP.md

@@ -128,38 +128,37 @@ public class ProjetoController {
     @PodeEscrever
     @Operation(
             summary = "Encaminha o projeto à Coelba",
-            description = "Sem dataEncaminhado no corpo, assume hoje. Essa data alimenta a "
-                    + "métrica de tempo entre recebimento e envio. Informe o numeroSolicitacao "
-                    + "devolvido pela Coelba: é por ele que o retorno por e-mail será casado "
-                    + "com o projeto. Exige consulta de débito de HOMOLOGACAO registrada.")
+            description = "O numeroSolicitacao devolvido pela Coelba é obrigatório: é por ele "
+                    + "que o retorno por e-mail é casado com o projeto, e sem ele o projeto vai "
+                    + "à Coelba sem chave nenhuma de volta. Sem dataEncaminhado no corpo, "
+                    + "assume hoje — essa data alimenta a métrica de tempo entre recebimento e "
+                    + "envio. Exige consulta de débito de HOMOLOGACAO registrada.")
     @ApiResponse(responseCode = "409",
             description = "Transição inválida, cliente com débito, ou débito não consultado")
     public ProjetoResponse encaminhar(@PathVariable Long id,
-            @RequestBody(required = false) @Valid ProjetoEncaminharRequest requisicao,
+            @RequestBody @Valid ProjetoEncaminharRequest requisicao,
             @Autenticado UsuarioAutenticado usuario) {
 
-        return ProjetoResponse.de(projetoService.encaminhar(id,
-                requisicao == null ? null : requisicao.dataArt(),
-                requisicao == null ? null : requisicao.dataEncaminhado(),
-                requisicao == null ? null : requisicao.numeroSolicitacao(),
-                usuario.id()));
+        return ProjetoResponse.de(projetoService.encaminhar(id, requisicao.dataArt(),
+                requisicao.dataEncaminhado(), requisicao.numeroSolicitacao(), usuario.id()));
     }
 
     @PostMapping("/{id}/reencaminhar")
     @PodeEscrever
     @Operation(
             summary = "Reenvia o projeto após correção de uma reprova",
-            description = "Sem numeroSolicitacao no corpo, mantém o número já registrado.")
+            description = "O numeroSolicitacao é obrigatório também aqui: o reenvio é justamente "
+                    + "quando a Coelba pode devolver outro número, e deixá-lo de fora manteria o "
+                    + "número do ciclo anterior — que é o que o retorno por e-mail usaria para "
+                    + "casar. Repita o número se ele não mudou.")
     @ApiResponse(responseCode = "409",
             description = "Transição inválida, cliente com débito, ou débito não consultado")
     public ProjetoResponse reencaminhar(@PathVariable Long id,
-            @RequestBody(required = false) @Valid ProjetoEncaminharRequest requisicao,
+            @RequestBody @Valid ProjetoEncaminharRequest requisicao,
             @Autenticado UsuarioAutenticado usuario) {
 
-        return ProjetoResponse.de(projetoService.reencaminhar(id,
-                requisicao == null ? null : requisicao.dataEncaminhado(),
-                requisicao == null ? null : requisicao.numeroSolicitacao(),
-                usuario.id()));
+        return ProjetoResponse.de(projetoService.reencaminhar(id, requisicao.dataEncaminhado(),
+                requisicao.numeroSolicitacao(), usuario.id()));
     }
 
     @PostMapping("/{id}/aprovar")

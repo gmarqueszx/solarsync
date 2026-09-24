@@ -14,6 +14,8 @@ public record PendenciaResumoResponse(
         Long id,
         Long clienteId,
         String clienteNome,
+        /** Traz o cliente prioritário ao topo da fila; ver PrioridadePrimeiro. */
+        boolean clientePrioritario,
         TipoPendencia tipo,
         StatusPendencia status,
         Instant solicitadoEm,
@@ -26,6 +28,7 @@ public record PendenciaResumoResponse(
                 pendencia.getId(),
                 pendencia.getCliente().getId(),
                 pendencia.getCliente().getNome(),
+                pendencia.getCliente().isPrioridade(),
                 pendencia.getTipo(),
                 pendencia.getStatus(),
                 pendencia.getSolicitadoEm(),

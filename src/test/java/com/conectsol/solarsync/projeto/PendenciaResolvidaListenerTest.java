@@ -26,7 +26,7 @@ class PendenciaResolvidaListenerTest {
         listener = new PendenciaResolvidaListener(projetoService);
 
         PendenciaStatusChangedEvent evento = new PendenciaStatusChangedEvent(
-                1L, 10L, StatusPendencia.EM_ANDAMENTO, StatusPendencia.RESOLVIDA, Instant.now(), 99L);
+                1L, 10L, StatusPendencia.ABERTA, StatusPendencia.RESOLVIDA, Instant.now(), 99L);
 
         listener.aoResolverPendencia(evento);
 
@@ -38,7 +38,7 @@ class PendenciaResolvidaListenerTest {
         listener = new PendenciaResolvidaListener(projetoService);
 
         PendenciaStatusChangedEvent evento = new PendenciaStatusChangedEvent(
-                1L, 10L, StatusPendencia.ABERTA, StatusPendencia.EM_ANDAMENTO, Instant.now(), 99L);
+                1L, 10L, StatusPendencia.ABERTA, StatusPendencia.CANCELADA, Instant.now(), 99L);
 
         listener.aoResolverPendencia(evento);
 

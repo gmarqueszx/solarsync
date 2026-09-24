@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.conectsol.solarsync.common.web.PrioridadePrimeiro;
 import com.conectsol.solarsync.common.exception.ProjetoSemInstalacaoException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
 import com.conectsol.solarsync.projeto.Projeto;
@@ -34,7 +35,10 @@ public class VistoriaService {
 
     @Transactional(readOnly = true)
     public Page<Vistoria> listar(VistoriaFiltro filtro, Pageable paginacao) {
-        return vistoriaRepository.findAll(VistoriaSpecs.de(filtro), paginacao);
+        // A vistoria alcança o cliente por dois saltos; é a única etapa em que a prioridade não
+        // está a um passo da raiz da consulta.
+        return vistoriaRepository.findAll(VistoriaSpecs.de(filtro),
+                PrioridadePrimeiro.aplicar(paginacao, "projeto.cliente.prioridade"));
     }
 
     @Transactional(readOnly = true)

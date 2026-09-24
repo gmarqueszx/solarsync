@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.conectsol.solarsync.cliente.dto.ClienteFiltro;
 import com.conectsol.solarsync.cliente.dto.ClienteRequest;
 import com.conectsol.solarsync.cliente.dto.ClienteResponse;
+import com.conectsol.solarsync.cliente.dto.PrioridadeRequest;
 import com.conectsol.solarsync.common.EntidadeTipo;
 import com.conectsol.solarsync.common.security.Autenticado;
 import com.conectsol.solarsync.common.security.PodeEscrever;
@@ -108,6 +109,32 @@ public class ClienteController {
     public ClienteResponse reverificar(@PathVariable Long id,
             @Autenticado UsuarioAutenticado usuario) {
         return clienteService.reverificar(id, usuario.id());
+    }
+
+    @PostMapping("/{id}/prioridade")
+    @PodeEscrever
+    @Operation(
+            summary = "Marca o cliente como prioritário",
+            description = "O cliente passa a aparecer no topo da fila da etapa em que estiver, e "
+                    + "continua no topo das etapas seguintes até a prioridade ser encerrada. "
+                    + "Chamar de novo revisa o motivo, sem apagar quem pediu primeiro. "
+                    + "Com motivo INSTALACAO_ADIANTADA a data de instalação é obrigatória (409 "
+                    + "PRIORIDADE_SEM_INSTALACAO) e desce para o projeto do cliente — é a mesma "
+                    + "data que a etapa de vistoria exige, não uma segunda.")
+    public ClienteResponse marcarPrioridade(@PathVariable Long id,
+            @RequestBody @Valid PrioridadeRequest requisicao,
+            @Autenticado UsuarioAutenticado usuario) {
+        return clienteService.marcarPrioridade(id, requisicao, usuario.id());
+    }
+
+    @PostMapping("/{id}/remover-prioridade")
+    @PodeEscrever
+    @Operation(
+            summary = "Encerra a prioridade do cliente",
+            description = "Ele volta ao comportamento normal de ordenação. A data de instalação "
+                    + "já registrada no projeto permanece: ela é fato de campo, não privilégio.")
+    public ClienteResponse removerPrioridade(@PathVariable Long id) {
+        return clienteService.removerPrioridade(id);
     }
 
     @GetMapping("/{id}/historico")

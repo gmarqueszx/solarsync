@@ -96,7 +96,8 @@ class DashboardHttpTest extends AbstractIntegrationTest {
         consultarDebito(clienteA, "HOMOLOGACAO", "QUITADO");
         acao("/api/projetos/%d/encaminhar".formatted(projetoA),
                 """
-                        {"dataEncaminhado": "%s"}""".formatted(iso(50)));
+                        {"dataEncaminhado": "%s", "numeroSolicitacao": "2026-COE-A0001"}"""
+                        .formatted(iso(50)));
         acao("/api/projetos/%d/aprovar".formatted(projetoA),
                 """
                         {"dataAprovacao": "%s"}""".formatted(iso(40)));
@@ -117,7 +118,8 @@ class DashboardHttpTest extends AbstractIntegrationTest {
         consultarDebito(clienteB, "HOMOLOGACAO", "QUITADO");
         acao("/api/projetos/%d/encaminhar".formatted(projetoB),
                 """
-                        {"dataEncaminhado": "%s"}""".formatted(iso(10)));
+                        {"dataEncaminhado": "%s", "numeroSolicitacao": "2026-COE-B0002"}"""
+                        .formatted(iso(10)));
         acao("/api/projetos/%d/reprovar".formatted(projetoB),
                 """
                         {"motivo": "Faltou ART"}""");
@@ -293,7 +295,8 @@ class DashboardHttpTest extends AbstractIntegrationTest {
         consultarDebito(clienteD, "HOMOLOGACAO", "QUITADO");
         acao("/api/projetos/%d/encaminhar".formatted(projetoD),
                 """
-                        {"dataEncaminhado": "%s"}""".formatted(iso(15)));
+                        {"dataEncaminhado": "%s", "numeroSolicitacao": "2026-COE-D0004"}"""
+                        .formatted(iso(15)));
 
         // Sem filtro, os três envios do cenário.
         mvc.perform(get("/api/dashboard")

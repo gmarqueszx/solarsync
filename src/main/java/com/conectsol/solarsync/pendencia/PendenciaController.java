@@ -112,18 +112,8 @@ public class PendenciaController {
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{id}/iniciar")
-    @PodeEscrever
-    @Operation(summary = "Marca a pendência como EM_ANDAMENTO")
-    @ApiResponse(responseCode = "409", description = "Transição inválida a partir do status atual")
-    public PendenciaResponse iniciar(@PathVariable Long id,
-            @RequestBody(required = false) @Valid ObservacaoRequest requisicao,
-            @Autenticado UsuarioAutenticado usuario) {
-
-        return mudarStatus(id, StatusPendencia.EM_ANDAMENTO, usuario,
-                requisicao == null ? null : requisicao.observacao());
-    }
-
+    // Não há endpoint de "iniciar": apontar a pendência na triagem já é iniciá-la, e o relógio
+    // da métrica sai de solicitado_em, gravado na criação. Ver StatusPendencia.
     @PostMapping("/{id}/resolver")
     @PodeEscrever
     @Operation(

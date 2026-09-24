@@ -43,6 +43,14 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
     private static final String SENHA = "senha-de-teste-123";
     private static final String EMAIL = "analista.debito@conectsol.com";
 
+    /**
+     * Corpo mínimo válido do envio. O número da solicitação é obrigatório desde 17/09/2026, e
+     * sem ele o {@code @NotBlank} recusaria com 400 <b>antes</b> de a guarda de débito rodar —
+     * estes testes seriam aprovados pelo motivo errado, ou reprovados sem tocar no que provam.
+     */
+    private static final String NUMERO_VALIDO = """
+            {"numeroSolicitacao": "2026-COE-000001"}""";
+
     @Autowired
     private MockMvc mvc;
 
@@ -137,7 +145,7 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
 
         // Sem consulta de homologação registrada, encaminhar é recusado: ninguém olhou se este
         // cliente deve, e "não olhou" não é "não deve".
-        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), "{}")
+        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), NUMERO_VALIDO)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("DEBITO_NAO_CONSULTADO"));
 
@@ -158,7 +166,7 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("RECEBIDO"));
 
-        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), "{}")
+        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), NUMERO_VALIDO)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("CLIENTE_COM_DEBITO"));
 
@@ -190,7 +198,7 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk());
 
         // Continua faltando a consulta de homologação — a de pendência não responde por ela.
-        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), "{}")
+        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), NUMERO_VALIDO)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("DEBITO_NAO_CONSULTADO"));
 
@@ -199,7 +207,7 @@ class DebitoBloqueiaEnvioHttpTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk());
 
         // Com a homologação quitada o envio passa, ainda que a pendência siga travada.
-        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), "{}")
+        requisicaoAutenticada(post("/api/projetos/%d/encaminhar".formatted(projetoId)), NUMERO_VALIDO)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ENCAMINHADO"));
     }

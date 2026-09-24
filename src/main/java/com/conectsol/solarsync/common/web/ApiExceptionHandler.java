@@ -22,9 +22,14 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
+import com.conectsol.solarsync.common.exception.ClienteSomentePendenciaException;
 import com.conectsol.solarsync.common.exception.CredenciaisInvalidasException;
 import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
+import com.conectsol.solarsync.common.exception.LimiteDeTentativasException;
+import com.conectsol.solarsync.common.exception.NumeroSolicitacaoObrigatorioException;
+import com.conectsol.solarsync.common.exception.PrioridadeSemInstalacaoException;
 import com.conectsol.solarsync.common.exception.ProjetoSemInstalacaoException;
+import com.conectsol.solarsync.common.exception.ProximoDebitoAVencerException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
 import com.conectsol.solarsync.common.exception.UnificacaoNaoFeitaException;
 import com.conectsol.solarsync.common.exception.UsuarioNaoAutorizadoException;
@@ -78,6 +83,25 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problema(HttpStatus.CONFLICT, "DEBITO_NAO_CONSULTADO", excecao.getMessage());
     }
 
+    /**
+     * Terceira recusa do envio à Coelba, ao lado de CLIENTE_COM_DEBITO e DEBITO_NAO_CONSULTADO.
+     * Código próprio porque a ação que ela pede é diferente das outras duas: esperar, não cobrar.
+     */
+    @ExceptionHandler(ProximoDebitoAVencerException.class)
+    ProblemDetail proximoDebitoAVencer(ProximoDebitoAVencerException excecao) {
+        return problema(HttpStatus.CONFLICT, "PROXIMO_DEBITO_A_VENCER", excecao.getMessage());
+    }
+
+    @ExceptionHandler(ClienteSomentePendenciaException.class)
+    ProblemDetail clienteSomentePendencia(ClienteSomentePendenciaException excecao) {
+        return problema(HttpStatus.CONFLICT, "CLIENTE_SOMENTE_PENDENCIA", excecao.getMessage());
+    }
+
+    @ExceptionHandler(PrioridadeSemInstalacaoException.class)
+    ProblemDetail prioridadeSemInstalacao(PrioridadeSemInstalacaoException excecao) {
+        return problema(HttpStatus.CONFLICT, "PRIORIDADE_SEM_INSTALACAO", excecao.getMessage());
+    }
+
     @ExceptionHandler(UnificacaoNaoFeitaException.class)
     ProblemDetail unificacaoNaoFeita(UnificacaoNaoFeitaException excecao) {
         return problema(HttpStatus.CONFLICT, "UNIFICACAO_NAO_FEITA", excecao.getMessage());
@@ -86,6 +110,27 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ProjetoSemInstalacaoException.class)
     ProblemDetail projetoSemInstalacao(ProjetoSemInstalacaoException excecao) {
         return problema(HttpStatus.CONFLICT, "PROJETO_SEM_INSTALACAO", excecao.getMessage());
+    }
+
+    @ExceptionHandler(NumeroSolicitacaoObrigatorioException.class)
+    ProblemDetail numeroSolicitacaoObrigatorio(NumeroSolicitacaoObrigatorioException excecao) {
+        return problema(HttpStatus.CONFLICT, "NUMERO_SOLICITACAO_OBRIGATORIO",
+                excecao.getMessage());
+    }
+
+    /**
+     * 429 com {@code Retry-After} em segundos, como manda o RFC 9110 — é o cabeçalho que diz ao
+     * frontend (e a um cliente automatizado) quando vale a pena tentar de novo, em vez de
+     * insistir e prolongar o bloqueio.
+     */
+    @ExceptionHandler(LimiteDeTentativasException.class)
+    ResponseEntity<ProblemDetail> limiteDeTentativas(LimiteDeTentativasException excecao) {
+        ProblemDetail corpo = problema(HttpStatus.TOO_MANY_REQUESTS, "LIMITE_DE_TENTATIVAS",
+                excecao.getMessage());
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER,
+                        String.valueOf(Math.max(1, excecao.getEsperar().toSeconds())))
+                .body(corpo);
     }
 
     @ExceptionHandler(CredenciaisInvalidasException.class)

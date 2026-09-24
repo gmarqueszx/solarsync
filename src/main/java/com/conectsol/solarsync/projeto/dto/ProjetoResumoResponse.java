@@ -12,6 +12,10 @@ public record ProjetoResumoResponse(
         Long id,
         Long clienteId,
         String clienteNome,
+        /** Traz o cliente prioritário ao topo da fila; ver PrioridadePrimeiro. */
+        boolean clientePrioritario,
+        /** Projeto pago por financiamento: muda a etapa de destino no Nectar, não o fluxo aqui. */
+        boolean clienteBanco,
         TipoProjeto tipoProjeto,
         StatusProjeto status,
         Long analistaResponsavelId,
@@ -29,6 +33,8 @@ public record ProjetoResumoResponse(
                 projeto.getId(),
                 projeto.getCliente().getId(),
                 projeto.getCliente().getNome(),
+                projeto.getCliente().isPrioridade(),
+                projeto.getCliente().isBanco(),
                 projeto.getTipoProjeto(),
                 projeto.getStatus(),
                 projeto.getAnalistaResponsavel() == null ? null

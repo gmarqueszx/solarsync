@@ -1,8 +1,14 @@
 package com.conectsol.solarsync.pendencia;
 
 public enum StatusPendencia {
+    /**
+     * Único estado ativo: a solicitação está correndo na Coelba. Apontar a pendência na triagem
+     * <b>é</b> iniciá-la — não existe pendência identificada que ainda não foi solicitada, então
+     * o antigo {@code EM_ANDAMENTO} (e o endpoint {@code /iniciar} que levava até ele) era um
+     * clique a mais que não mudava nada: o relógio da métrica sempre saiu de
+     * {@code solicitado_em}, gravado na criação.
+     */
     ABERTA,
-    EM_ANDAMENTO,
     RESOLVIDA,
     CANCELADA;
 
@@ -20,10 +26,8 @@ public enum StatusPendencia {
      */
     public boolean podeIrPara(StatusPendencia destino) {
         return switch (this) {
-            case ABERTA -> destino == EM_ANDAMENTO || destino == RESOLVIDA || destino == CANCELADA;
-            case EM_ANDAMENTO -> destino == ABERTA || destino == RESOLVIDA || destino == CANCELADA;
-            case RESOLVIDA -> destino == ABERTA || destino == EM_ANDAMENTO;
-            case CANCELADA -> destino == ABERTA;
+            case ABERTA -> destino == RESOLVIDA || destino == CANCELADA;
+            case RESOLVIDA, CANCELADA -> destino == ABERTA;
         };
     }
 }

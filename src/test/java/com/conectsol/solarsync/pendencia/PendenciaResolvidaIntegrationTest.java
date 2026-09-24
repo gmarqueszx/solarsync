@@ -90,7 +90,7 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
         Pendencia pendencia = pendenciaRepository.save(Pendencia.builder()
                 .cliente(cliente)
                 .tipo(TipoPendencia.LIGACAO_NOVA)
-                .status(StatusPendencia.EM_ANDAMENTO)
+                .status(StatusPendencia.ABERTA)
                 .solicitadoEm(Instant.now())
                 .responsavel(analista)
                 .build());
@@ -104,7 +104,7 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
         // aceitá-la aqui deixaria a pendência avançar sem ninguém ter olhado o que a trava.
         debitoService.registrarConsulta(cliente.getId(),
                 new DebitoRegistrarRequest(TipoDebito.HOMOLOGACAO, StatusDebito.QUITADO,
-                        Instant.now()),
+                        Instant.now(), null),
                 analista.getId());
         assertThatThrownBy(() -> pendenciaService.atualizarStatus(
                 pendencia.getId(), StatusPendencia.RESOLVIDA, analista.getId()))
@@ -112,7 +112,7 @@ class PendenciaResolvidaIntegrationTest extends AbstractIntegrationTest {
 
         debitoService.registrarConsulta(cliente.getId(),
                 new DebitoRegistrarRequest(TipoDebito.PENDENCIA, StatusDebito.QUITADO,
-                        Instant.now()),
+                        Instant.now(), null),
                 analista.getId());
 
         pendenciaService.atualizarStatus(pendencia.getId(), StatusPendencia.RESOLVIDA, analista.getId());

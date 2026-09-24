@@ -1,6 +1,8 @@
 package com.conectsol.solarsync.debito;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 
@@ -14,6 +16,8 @@ import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.auth.UsuarioRepository;
 import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
+import com.conectsol.solarsync.common.FusoDaOperacao;
+import com.conectsol.solarsync.common.web.PrioridadePrimeiro;
 import com.conectsol.solarsync.debito.dto.DebitoFiltro;
 import com.conectsol.solarsync.debito.dto.DebitoRegistrarRequest;
 import com.conectsol.solarsync.debito.event.DebitoStatusChangedEvent;
@@ -34,6 +38,14 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class DebitoService {
 
+    /**
+     * De quantos dias de folga o envio precisa. Um, como a equipe descreveu: "se faltar 1 dia ou
+     * menos para o próximo débito vencer e o projeto for encaminhado" — projeto enviado em 22/09
+     * com conta vencendo em 23/09 é recusado. Constante e não propriedade porque é regra de
+     * negócio da Coelba, não configuração de ambiente.
+     */
+    private static final long DIAS_DE_FOLGA = 1;
+
     private final DebitoRepository debitoRepository;
     private final ClienteRepository clienteRepository;
     private final UsuarioRepository usuarioRepository;
@@ -41,7 +53,8 @@ public class DebitoService {
 
     @Transactional(readOnly = true)
     public Page<Debito> listar(DebitoFiltro filtro, Pageable paginacao) {
-        return debitoRepository.findAll(DebitoSpecs.de(filtro), paginacao);
+        return debitoRepository.findAll(DebitoSpecs.de(filtro),
+                PrioridadePrimeiro.aplicar(paginacao, "cliente.prioridade"));
     }
 
     /**
@@ -75,6 +88,27 @@ public class DebitoService {
     public boolean clienteTemDebitoAtivo(Long clienteId, TipoDebito tipo) {
         return debitoRepository.existsByClienteIdAndTipoAndStatus(
                 clienteId, tipo, StatusDebito.ATIVO);
+    }
+
+    /**
+     * O próximo débito conhecido do cliente <b>nesta etapa</b>, quando falta um dia ou menos para
+     * ele vencer. Nulo quando não há consulta, não há próxima data informada, ou ela ainda está
+     * longe.
+     * <p>
+     * Devolve a data em vez de um booleano porque quem recusa a operação precisa dizer <b>qual</b>
+     * é a data — "aguarde a quitação" sem dizer até quando não ajuda ninguém a decidir.
+     * <p>
+     * O "hoje" vem de {@link FusoDaOperacao}, não de {@code LocalDate.now()}: num VPS em UTC, das
+     * 21h em diante o servidor já está no dia seguinte, e a conta erraria por um dia exatamente na
+     * faixa em que a resposta muda.
+     */
+    @Transactional(readOnly = true)
+    public LocalDate proximoDebitoNaIminencia(Long clienteId, TipoDebito tipo) {
+        return debitoRepository.findByClienteIdAndTipo(clienteId, tipo)
+                .map(Debito::getProximoVencimento)
+                .filter(vencimento -> ChronoUnit.DAYS.between(FusoDaOperacao.hoje(), vencimento)
+                        <= DIAS_DE_FOLGA)
+                .orElse(null);
     }
 
     /**
@@ -118,6 +152,7 @@ public class DebitoService {
                     .consultadoPor(consultadoPor)
                     .detectadoEm(requisicao.status() == StatusDebito.ATIVO ? consultadoEm : null)
                     .quitadoEm(requisicao.status() == StatusDebito.QUITADO ? consultadoEm : null)
+                    .proximoVencimento(proximoVencimentoDe(requisicao))
                     .build());
 
             publicar(novo, null, requisicao.status(), consultadoEm, usuarioId);
@@ -127,6 +162,9 @@ public class DebitoService {
         StatusDebito statusAnterior = debito.getStatus();
         debito.setUltimaConsultaEm(consultadoEm);
         debito.setConsultadoPor(consultadoPor);
+        // Sempre substitui, mesmo quando a situação não mudou: reconsultar é justamente como se
+        // descobre que a próxima conta mudou de data (ou que não há mais nenhuma).
+        debito.setProximoVencimento(proximoVencimentoDe(requisicao));
 
         // Reconsultar e achar a mesma situação é atualização de data, não mudança de estado:
         // não publica evento, para não poluir o histórico e distorcer o tempo parado.
@@ -155,6 +193,16 @@ public class DebitoService {
     public void excluir(Long id) {
         debitoRepository.delete(debitoRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Débito não encontrado: " + id)));
+    }
+
+    /**
+     * O próximo vencimento só vale acompanhado de quitação. Com o débito {@code ATIVO} não existe
+     * "próxima conta" a esperar — existe a atual, e é ela que já barra o envio; manter uma data
+     * futura ali faria a recusa por iminência se somar à recusa por débito ativo, com dois
+     * códigos de erro diferentes para o mesmo cliente parado pelo mesmo motivo.
+     */
+    private static LocalDate proximoVencimentoDe(DebitoRegistrarRequest requisicao) {
+        return requisicao.status() == StatusDebito.QUITADO ? requisicao.proximoVencimento() : null;
     }
 
     private Usuario resolverUsuario(Long usuarioId) {

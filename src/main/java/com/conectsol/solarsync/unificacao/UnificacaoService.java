@@ -15,6 +15,7 @@ import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
 import com.conectsol.solarsync.common.exception.UnificacaoNaoFeitaException;
+import com.conectsol.solarsync.common.web.PrioridadePrimeiro;
 import com.conectsol.solarsync.unificacao.dto.UnificacaoFiltro;
 import com.conectsol.solarsync.unificacao.dto.UnificacaoRequest;
 import com.conectsol.solarsync.unificacao.event.UnificacaoStatusChangedEvent;
@@ -42,7 +43,8 @@ public class UnificacaoService {
 
     @Transactional(readOnly = true)
     public Page<Unificacao> listar(UnificacaoFiltro filtro, Pageable paginacao) {
-        return unificacaoRepository.findAll(UnificacaoSpecs.de(filtro), paginacao);
+        return unificacaoRepository.findAll(UnificacaoSpecs.de(filtro),
+                PrioridadePrimeiro.aplicar(paginacao, "cliente.prioridade"));
     }
 
     @Transactional(readOnly = true)

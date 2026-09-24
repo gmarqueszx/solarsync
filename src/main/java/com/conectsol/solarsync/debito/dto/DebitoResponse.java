@@ -1,6 +1,7 @@
 package com.conectsol.solarsync.debito.dto;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 
 import com.conectsol.solarsync.auth.dto.UsuarioResumoResponse;
@@ -23,6 +24,7 @@ public record DebitoResponse(
         Instant ultimaConsultaEm,
         Instant detectadoEm,
         Instant quitadoEm,
+        LocalDate proximoVencimento,
         Long diasParado,
         UsuarioResumoResponse consultadoPor,
         Instant criadoEm,
@@ -37,6 +39,7 @@ public record DebitoResponse(
                 debito.getUltimaConsultaEm(),
                 debito.getDetectadoEm(),
                 debito.getQuitadoEm(),
+                debito.getProximoVencimento(),
                 diasParado(debito),
                 UsuarioResumoResponse.de(debito.getConsultadoPor()),
                 debito.getCriadoEm(),
