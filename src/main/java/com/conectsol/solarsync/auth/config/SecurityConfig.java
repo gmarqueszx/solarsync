@@ -57,6 +57,10 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html").permitAll()
+                        // O healthcheck do container roda sem token. Devolve só UP/DOWN
+                        // (show-details=never) e o proxy reverso o bloqueia de fora — quem o
+                        // alcança é o próprio Docker, em localhost dentro do container.
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(conversorDeAutenticacao)))

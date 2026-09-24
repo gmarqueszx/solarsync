@@ -79,8 +79,46 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
     do cliente: responde "de onde veio este cadastro", que é a pergunta de quem vê um cliente
     que ninguém digitou. Está em `ClienteResponse` por isso — a criação do cliente não publica
     evento, então sem esse campo nem o `historico_status` contaria a procedência
-  - O `PUT /api/clientes/{id}` **não** mexe em `status_triagem` — corrigir telefone não pode, de
-    passagem, apagar o fato de que a Coelba já foi consultada
+  - O `PUT /api/clientes/{id}` **não** mexe em `status_triagem` nem na **prioridade** —
+    corrigir telefone não pode, de passagem, apagar o fato de que a Coelba já foi consultada nem
+    o pedido de adiantamento de alguém
+  - **prioridade / prioridade_motivo / prioridade_observacao / prioridade_definida_em /
+    prioridade_definida_por_id / prioridade_data_instalacao** (V16, 22/09/2026): o cliente
+    adiantado a pedido. Fica no Cliente, e não em nenhuma entidade de etapa, porque é
+    exatamente isso que o requisito pede — "no topo da etapa em que estiver, independentemente
+    da etapa atual, e continua no topo quando avançar". As entidades de etapa nascem e morrem ao
+    longo do fluxo; o cliente atravessa todas
+    - `POST /api/clientes/{id}/prioridade` liga ou **revisa** (chamar de novo troca o motivo sem
+      apagar quem pediu primeiro); `POST /api/clientes/{id}/remover-prioridade` encerra
+    - O motivo é obrigatório (`MotivoPrioridade`: `INSTALACAO_ADIANTADA`, `PRAZO_CONTRATUAL`,
+      `PRAZO_DO_CLIENTE`, `OUTRO`). Prioridade sem motivo não dá para revisar depois — ninguém
+      sabe se ainda vale. Sem `podeIrPara`, pela mesma razão do `StatusTriagem`: qualquer motivo
+      pode virar qualquer outro
+    - ⚠️ **`prioridade_data_instalacao` não é um segundo campo de data de instalação.** O campo
+      do fluxo continua sendo `projeto.data_instalacao`, que é o que a vistoria lê e exige. A
+      coluna do cliente existe porque a prioridade é marcada **na triagem**, quando em geral
+      ainda não há projeto para receber a data: ela espera ali e desce para o projeto assim que
+      ele existe (na hora se já existir; no nascimento dele se não). Obrigatória só com
+      `INSTALACAO_ADIANTADA` — 409 `PRIORIDADE_SEM_INSTALACAO`
+    - A propagação **nunca sobrescreve** data já registrada: quem instalou e anotou na etapa de
+      vistoria sabe mais que um pedido de prioridade que pode ser de semanas atrás
+    - Encerrar a prioridade **não apaga** a data já propagada: ela é fato de campo, não
+      privilégio, e apagá-la travaria a solicitação da vistoria adiante
+    - ⚠️ `prioridade_definida_por_id` tem FK para `usuario`: em teste, limpar `cliente` **antes**
+      de `usuario`. É a mesma armadilha que `historico_status.usuario_id` já criava
+  - **somente_pendencia** (V16): o cliente avulso que o gestor manda ao setor só para resolver
+    uma pendência — entrada → pendência → resolvida → **fim**, sem projeto. Flag e não status:
+    não é uma etapa, é o desenho do fluxo daquele cliente, decidido na entrada. Fica no
+    `ClienteRequest` (cadastro/triagem) de propósito, porque **desmarcá-lo é o caminho** para
+    devolver ao fluxo completo o avulso que virou projeto de verdade
+  - **banco** (V16): projeto pago por financiamento. Muda uma coisa só, e fora do SolarSync: a
+    etapa para onde o cliente volta no Nectar quando o projeto é aprovado (seção 9). Ligado
+    automaticamente quando a oportunidade entra pela etapa de banco do CRM, e editável à mão
+  - **etiquetas** (`ClienteResponse.etiquetas`): `CRM` e `BANCO`, **derivadas** de `origem` e
+    `banco`. Derivadas e não armazenadas é o que atende, por construção, ao "não duplicar
+    etiquetas caso a operação seja executada novamente" — uma lista calculada a cada leitura não
+    tem como acumular repetição, enquanto uma tabela dependeria de todo caminho de escrita
+    lembrar de conferir antes de inserir
 - **Pendencia** — cliente_id, tipo, status, solicitado_em, resolvido_em, responsavel_id, observação
   - **Um único status ativo**: `ABERTA` → `RESOLVIDA` | `CANCELADA`, e as duas voltam para
     `ABERTA`. Apontar a pendência na triagem do cliente **é** iniciá-la — dali o cliente já cai
@@ -112,6 +150,19 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
   mesmo dado, então quitar para uma destravava a outra sem ninguém ter olhado, e não havia como
   responder "este cliente está parado por quê" — que é a pergunta do financeiro. Um cliente pode
   ter mais de uma UC, e a UC da pendência não é necessariamente a geradora.
+  <p>
+  **proximo_vencimento** (V17, 22/09/2026) é a data da próxima conta, vista na mesma consulta
+  que constatou a quitação. Resolve o problema que a equipe levantou: o cliente pode estar
+  quitado hoje e ter conta vencendo amanhã, e o projeto encaminhado nessa véspera volta
+  reprovado — quando a Coelba for analisar, já existe débito. Faltando **um dia ou menos**,
+  `/encaminhar` e `/reencaminhar` recusam com 409 `PROXIMO_DEBITO_A_VENCER`.
+  <p>
+  Opcional de propósito: "não informado" é o caso normal e é diferente de "não existe próxima
+  conta" — inventar uma data faria o envio ser recusado por um vencimento que ninguém viu. Só
+  vale com `QUITADO`: com débito ATIVO não há "próxima" a esperar, há a atual, e é ela que já
+  barra o envio; guardar as duas daria dois códigos de erro para o mesmo cliente parado pelo
+  mesmo motivo. Reconsultar **substitui** a data, que é como se descobre que a conta mudou de
+  vencimento ou que não há mais nenhuma à vista.
   <p>
   `detectado_em` / `quitado_em` são o **relógio do tempo parado**, exposto como `diasParado` no
   response (nulo quando não está ATIVO — nulo ≠ zero, como nas médias do dashboard). A média do
@@ -193,6 +244,13 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
 deve disparar o avanço automático para a próxima. Ex.: `Pendencia.status = RESOLVIDA` cria/ativa
 automaticamente o registro correspondente em `Projeto` com status inicial. Implementado via
 evento de domínio (Spring `ApplicationEventPublisher`) — não hardcoded em controller.
+
+⚠️ **A exceção é o cliente `somente_pendencia`**, e a guarda vive em
+`ProjetoService.criarOuAtivarProjetoParaCliente` (devolve `null`), não nos listeners. É o único
+caminho automático de criação de projeto, então a guarda ali cobre os dois listeners de uma vez —
+o da pendência resolvida e o da triagem sem pendência — e cobriria um terceiro que aparecesse
+depois. `ProjetoService.criar` (a criação à mão) recusa com 409 `CLIENTE_SOMENTE_PENDENCIA`, senão
+o botão "Novo Projeto" contornaria o fluxo curto sem ninguém notar.
 
 **Regra arquitetural (não quebrar)**: toda transição de status passa pelo service do módulo
 (`PendenciaService.atualizarStatus`, `ProjetoService.atualizarStatus`), que é o **único** ponto
@@ -399,6 +457,12 @@ Cada item abaixo quebrou o build ou a aplicação neste projeto — não confie 
   `testcontainers-junit-jupiter`.
 - Starters OAuth2 renomeados: use `spring-boot-starter-security-oauth2-resource-server`; o
   `spring-boot-starter-oauth2-resource-server` está **deprecado**.
+- **Jackson 3 recusa componente primitivo ausente em `record`**: ele liga
+  `FAIL_ON_NULL_FOR_PRIMITIVES` por padrão, ao contrário do Jackson 2. Acrescentar um
+  `boolean` a um request DTO faz **todo** corpo que omita aquela chave voltar 400 — inclusive os
+  que já existem no frontend, nos testes e na importação. Custou 30 testes vermelhos ao pôr
+  `somentePendencia`/`banco` no `ClienteRequest`. Use `Boolean` e normalize no construtor compacto
+  do record.
 - **Jackson 3**: o runtime virou `tools.jackson.*` e `WRITE_DATES_AS_TIMESTAMPS` saiu de
   `SerializationFeature` para `DateTimeFeature`, já **desabilitado por padrão** (datas saem em
   ISO-8601 sem configurar nada). Configurar `spring.jackson.serialization.write-dates-as-timestamps`
@@ -446,8 +510,8 @@ Cada item abaixo quebrou o build ou a aplicação neste projeto — não confie 
   ├── historico (auditoria de status)
   ├── dashboard          (agregações em SQL nativo sobre historico_status)
   ├── common/referencia  (listas fechadas do cadastro; ver abaixo)
-  ├── integracao         (entrada automática; ver seção 9)
-  │   ├── nectar    (job de polling, cliente HTTP, ingestão de negócio fechado)
+  ├── integracao         (entrada e saída automáticas; ver seção 9)
+  │   ├── nectar    (polling de entrada, cliente HTTP, ingestão, sincronização de etapa)
   │   └── gmail     (cliente HTTP, parser do e-mail da Coelba, trilha email_coelba)
   └── common
       ├── config    (WebMvc, JpaAuditing, OpenAPI)
@@ -513,6 +577,21 @@ contratação.
   duas coisas faltam. Importa para quem escrever teste: mandar `{}` para provar a guarda de
   débito passa a ser aprovado pelo motivo errado — o `DebitoBloqueiaEnvioHttpTest` tem uma
   constante `NUMERO_VALIDO` exatamente por isso.
+- **Três recusas diferentes no envio à Coelba**, e os três códigos são distinguíveis de
+  propósito porque cada um pede uma ação diferente de quem está na tela: 409
+  `DEBITO_NAO_CONSULTADO` pede a consulta na agência virtual, 409 `CLIENTE_COM_DEBITO` pede a
+  cobrança, e 409 `PROXIMO_DEBITO_A_VENCER` pede **esperar** — não há o que cobrar, a conta ainda
+  nem venceu. Juntá-los mandaria a analista atrás da coisa errada.
+- **409 `CLIENTE_SOMENTE_PENDENCIA`** ao criar projeto para cliente de fluxo curto, e 409
+  `PRIORIDADE_SEM_INSTALACAO` ao pedir prioridade por instalação sem a data. As duas são
+  validações cruzadas entre campos, que o Bean Validation não faz sem anotação de classe — e que
+  precisam valer também para origens que não passam pelo controller.
+- **Prioridade primeiro em toda listagem** (`common/web/PrioridadePrimeiro`): as seis listagens
+  prefixam a ordenação do usuário com a flag do cliente. É **prefixo**, não substituição — dentro
+  de cada grupo a coluna escolhida continua valendo, então clicar num cabeçalho reordena os
+  prioritários entre si e os normais entre si, sem misturá-los. O frontend faz o mesmo em
+  `useOrdenacao`, e as duas pontas precisam concordar: se divergissem, paginar embaralharia a
+  ordem entre uma página e outra.
 - **409 `NUMERO_SOLICITACAO_OBRIGATORIO`** existe além do 400 do `@NotBlank`: a guarda vive
   também no `ProjetoService`, para valer quando a origem não é a tela (a importação da planilha,
   ou uma integração futura). Mesma razão da guarda de débito estar no service.
@@ -567,6 +646,12 @@ Referência: estilo Navan (SaaS enterprise), adaptado para paleta verde a pedido
     se a pendência anda e se o projeto pode ser enviado
   - **Sem rótulo de etapa nos módulos.** "Etapa 2 & 3" descrevia o desenho do processo, não o
     trabalho de quem abre a tela, e numerava um fluxo que na operação não é linear
+  - **Selos ao lado do nome do cliente** (`components/common/SelosCliente`, 22/09/2026):
+    `Prioridade` (âmbar, seta para cima), `Só pendência` (cinza) e as etiquetas `CRM` e `Banco`.
+    Num arquivo só porque aparecem em seis módulos — e cada um só aparece quando diz algo que
+    muda o trabalho de quem olha: selo em toda linha vira ruído e deixa de ser informação
+  - **Prioridade âmbar com seta, não vermelho**: a leitura precisa ser "este subiu na fila", não
+    "este tem um problema", que é o que a paleta de erro diria
 
 Pendente: gerar escala completa (50-900) a partir de `#149911` no uicolors.app quando for
 implementar o CSS/tema.
@@ -588,8 +673,8 @@ uma única empresa (ConectSol), não SaaS multi-cliente. Isso muda a prioridade 
 | 8 | Botão de reportar problema | **Sim, recomendado** | Útil dado que analistas vão operar o sistema diariamente — botão de feedback com captura de tela/contexto ajuda a substituir o "manda áudio de 3 minutos" |
 | 9 | Testes automáticos | **Sim, obrigatório** | Crítico especificamente para a regra de integração entre etapas (seção 3: pendência resolvida → cria projeto automaticamente) e para o cálculo das métricas do dashboard — são os dois pontos onde um bug silencioso derruba a confiança do gestor no sistema |
 | 10 | Auditoria de segurança | **Sim, antes de ir ao ar** | Sistema guarda dado de cliente final (nome, débito, projeto) — mesmo sendo uso interno, uma auditoria básica (dependências desatualizadas, endpoints sem autenticação, RBAC sem furo) antes do deploy no VPS Contabo é razoável |
-| 11 | WAF / rate limiting | **Rate limit feito; WAF pendente** | `ControleDeTentativasDeLogin` (19/09/2026) — ver abaixo. Falta o Cloudflare (gratuito) na frente do VPS Contabo |
-| 12 | HTTPS/TLS | **Sim, obrigatório** | Certificado (Let's Encrypt) + redirecionamento forçado HTTPS no domínio usado no VPS Contabo |
+| 11 | WAF / rate limiting | **Rate limit feito; WAF pendente** | `ControleDeTentativasDeLogin` (19/09/2026) — ver abaixo. Falta ligar a nuvem laranja do Cloudflare no registro da API, o que só pode ser feito depois de o primeiro certificado sair (seção 14) |
+| 12 | HTTPS/TLS | **Escrito, falta rodar** | Caddy no `deploy/`, com emissão e renovação automáticas do Let's Encrypt e redirecionamento de HTTP embutido (seção 14). Fica *feito* quando a pilha subir num servidor de verdade |
 
 **Resumo prático**: dos 12, os itens 4 e 7 não se aplicam no sentido original (são pensados pra
 SaaS multi-cliente); o 5 é opcional; os outros 9 valem para o SolarSync.
@@ -604,12 +689,13 @@ eventos da seção 3 foi o ponto de extensão delas — nenhuma exigiu refatora�
 |---|---|---|
 | **Nectar (CRM)** — criar cliente quando negócio fecha | Entrada | **Feito**: job puxa a cada 10 min (`integracao/nectar`) |
 | **Gmail** — ler o retorno diário da Coelba | Entrada | **Feito**: job lê a cada 15 min e aplica o status (`integracao/gmail`) |
-| **Nectar (CRM)** — refletir status de volta pro comercial | Saída | Não feito. `@Component` em `integracao/nectar` com `@TransactionalEventListener(AFTER_COMMIT)` sobre `EntidadeStatusEvent`. Zero mudança em `pendencia`/`projeto` |
+| **Nectar (CRM)** — mover a etapa do cliente conforme o projeto anda | Saída | **Feito** (22/09/2026): `NectarEtapaListener` → `NectarEtapaService` → `NectarClient`. Zero mudança em `pendencia`/`projeto`/`vistoria` |
 
-**Ambas desligadas por padrão**, e é o padrão que importa: os jobs são beans
-`@ConditionalOnProperty`, então sem `solarsync.nectar.ativo=true` / `solarsync.gmail.ativo=true`
-não existe nada agendado — nem nos testes, nem no dev de quem não está mexendo nisso. Nenhuma
-credencial no repositório (item 6 do checklist): ver `.env.example`.
+**Todas desligadas por padrão**, e é o padrão que importa: os jobs e listeners são beans
+`@ConditionalOnProperty`, então sem `solarsync.nectar.ativo=true` / `solarsync.gmail.ativo=true` /
+`solarsync.nectar.saida.ativo=true` não existe nada agendado — nem nos testes, nem no dev de quem
+não está mexendo nisso. Nenhuma credencial no repositório (item 6 do checklist): ver
+`.env.example`.
 
 ⚠️ **`solarsync.*.ativo=true` em `config/application.properties` vazaria para os testes.** Aquele
 arquivo é lido também durante os testes e com precedência sobre o classpath (seção 6) — então
@@ -626,10 +712,12 @@ e-mail muda o status do projeto receber `CONFERENCIA`. Custou quatro testes verm
 isso o `AbstractIntegrationTest` agora força também essa. Regra geral: propriedade que muda
 comportamento de service — e não só a existência de um bean — precisa de override lá.
 
-Nenhuma das duas adiciona endpoint. São jobs que chamam os services do domínio — o mesmo caminho
-da tela —, o que é exatamente o que a regra arquitetural da seção 3 comprava: auditoria em
+Nenhuma das três adiciona endpoint. As de entrada são jobs que chamam os services do domínio —
+o mesmo caminho da tela —, e a de saída é um listener sobre os eventos que esses services já
+publicavam. É exatamente o que a regra arquitetural da seção 3 comprava: auditoria em
 `historico_status` e máquina de estados valem igual, venha a mudança de um clique ou de um
-e-mail. `@EnableScheduling` fica em `integracao/IntegracaoConfig`.
+e-mail; e a volta ao CRM acontece igual, venha a transição da tela, do e-mail ou de uma
+importação. `@EnableScheduling` fica em `integracao/IntegracaoConfig`.
 
 ### Nectar: entrada de clientes
 
@@ -680,10 +768,16 @@ Java.
 **As duas etapas de entrada** (confirmadas pelo usuário em 17/09/2026), padrão em
 `NectarProperties`:
 
-| Funil | Etapa | Ids |
-|---|---|---|
-| `5- Financeiro` | `VALIDADO PELO FINANCEIRO` | funil 58569, etapa 288685 |
-| `4- Nota Fiscal` | `ADIANTAR PROJETO COELBA PARA BANCO OU VENDEDOR` | funil 58574, etapa 288704 |
+| Funil | Etapa | Ids | Banco? |
+|---|---|---|---|
+| `5- Financeiro` | `VALIDADO PELO FINANCEIRO` | funil 58569, etapa 288685 | não |
+| `4- Nota Fiscal` | `ADIANTAR PROJETO COELBA PARA BANCO OU VENDEDOR` | funil 58574, etapa 288704 | **sim** |
+
+⚠️ **A etiqueta "Banco" sai da etapa de entrada, e é por isso que ela precisa virar dado do
+cliente na hora da importação**: a oportunidade segue andando no CRM, então a etapa por onde ela
+entrou não sobrevive. `EtapaDeEntrada.banco` liga `cliente.banco`, que decide uma coisa só — a
+etapa para onde o projeto aprovado volta no Nectar. Dentro do SolarSync o fluxo é idêntico ao
+normal.
 
 A etapa é identificada por **funil + nome**, nunca por um só. O número da etapa é a sequência
 *dentro* do funil (a etapa 4 existe nos treze funis), e o nome também se repete: "VALIDADO PELO
@@ -953,6 +1047,98 @@ necessário.
 oportunidade, um e-mail) é tratado à parte — o Nectar fora do ar, um token revogado ou uma
 linha problemática no CRM custam uma execução, não a integração.
 
+### Nectar: a volta — a etapa do CRM segue o status do SolarSync (22/09/2026)
+
+`NectarEtapaListener` (`@TransactionalEventListener(AFTER_COMMIT)`) → `NectarEtapaService` →
+`NectarClient`.
+
+É a integração de saída que faltava, e a que o desenho de eventos da seção 3 deixou mais barata:
+**nada em `pendencia`, `projeto` ou `vistoria` mudou**. O efeito colateral bom é que uma origem
+nova de mudança de status — a leitura do e-mail da Coelba, por exemplo — já cai aqui de graça.
+
+O endpoint que faltava quando a entrada foi escrita: **`GET /pipelines`** devolve os treze funis
+com todas as suas etapas (id, nome, sequência). Foi dele que saíram os ids abaixo, conferidos
+contra a API real em 22/09/2026, e é dele que o cliente HTTP copia os objetos de funil e etapa em
+vez de montá-los à mão.
+
+#### O mapa de etapas
+
+Só uma linha difere entre o fluxo normal e o Banco — a da aprovação —, e por isso a configuração
+é um mapa geral mais um **mapa de diferenças** (`etapas-banco`) em vez de duas tabelas completas:
+duas tabelas iguais em dez das onze linhas divergem no dia em que alguém mexe só numa.
+
+| Situação no SolarSync | Etapa no Nectar | Normal | Banco |
+|---|---|---|---|
+| Pendência aberta | `6- Projetos` PENDÊNCIA CONTA COELBA OU ALTERAÇÃO NO PADRÃO | 288714 | = |
+| Pendência resolvida / aguardando envio | `6- Projetos` PROJETO PARA FAZER | 288715 | = |
+| Projeto encaminhado | `6- Projetos` PROJETO ENCAMINHADO | 288716 | = |
+| Projeto reprovado | `6- Projetos` PROJETO REPROVADO | 288717 | = |
+| Retificado e encaminhado de novo | `6- Projetos` PROJETO RETIFICADO E ENCAMINHADO NOVAMENTE | 288718 | = |
+| **Projeto aprovado** | normal: AGUARDANDO INSTALAÇÃO · Banco: APROVADO SEM PAGAMENTO | 288719 | **288686** |
+| Vistoria solicitada | `7- Instalação` VISTORIA SOLICITADA | 288728 | = |
+| Vistoria reprovada | `7- Instalação` VISTORIA REPROVADA | 288725 | = |
+| Vistoria resolicitada após reprova | `7- Instalação` CORREÇÃO DE ERRO NA OBRA E VISTORIA SOLICITADA NOVAMENTE | 288722 | = |
+| Vistoria aprovada | `7- Instalação` VISTORIA APROVADA - 100% CONCLUIDO | 288726 | = |
+
+⚠️ **O funil 7 tem duas etapas de vistoria aprovada.** A escolhida é a 288726, por decisão do
+usuário em 22/09/2026 — a 288720 ("APROVADA - PENDENTE INSTALAÇÃO") ficou de fora.
+
+`EtapaDoFluxo` **não é uma cópia dos status do domínio**, e é de propósito: o CRM acompanha a
+gestão do cliente, não a máquina de estados da homologação. `RECEBIDO` e `AGUARDANDO_ENVIO` são
+coisas diferentes aqui dentro e a mesma lá fora; já `SOLICITADA` na vistoria vira duas, porque o
+Nectar distingue a primeira solicitação da que vem depois de uma reprova — e essa distinção só
+existe olhando o status **anterior** do evento, já que a vistoria reaproveita o mesmo registro.
+
+⚠️ **Resolver a pendência não move ninguém.** Quem move o cliente para "projeto para fazer" é o
+projeto que nasce em seguida; mandar as duas movimentações seria duas chamadas ao CRM para o mesmo
+instante do fluxo, com a segunda desfazendo a primeira em ordem indeterminada.
+
+#### Idempotência, falha e reprocessamento
+
+**Duas camadas de idempotência, por razões diferentes:**
+
+1. a trilha local (`nectar_etapa_sincronizacao`) — evita a viagem quando já pusemos o cliente
+   naquela etapa. É economia;
+2. o próprio CRM, consultado antes do `PUT` — vale quando alguém arrastou o card no painel ou
+   quando o banco daqui foi recriado. Essa é a que é verdade.
+
+A trilha olha só a **última** linha do cliente, não todas: voltar para uma etapa anterior é
+movimento legítimo (projeto aprovado que a Coelba revisa e reprova), e uma busca por "já estivemos
+nesta etapa alguma vez" deixaria o cliente preso na etapa mais recente para sempre.
+
+**Falha nunca desfaz nada aqui dentro.** O listener é `AFTER_COMMIT`: o status já está gravado
+quando o CRM é chamado. Se ele recusar, fica uma linha `ERRO` — a única pista de que o CRM ficou
+para trás, porque não há tela. O `NectarEtapaReprocessamentoJob` retoma essas falhas a cada 30
+min, e **só as que ainda são a última palavra sobre o cliente**: repetir uma falha antiga
+empurraria o cliente de volta no CRM, e a integração passaria a mentir com a melhor das intenções.
+
+**Tabela `nectar_etapa_sincronizacao`** (V18) — irmã de `email_coelba`, e pelas mesmas razões: a
+mudança acontece sozinha e não há tela. Como ela, não tem endpoint de escrita e o `cliente_id`
+**não tem FK** (com FK, excluir um cliente falharia com 409 por causa da trilha de uma
+integração). Os seis resultados — `APLICADO`, `CONFERENCIA`, `JA_NA_ETAPA`, `SEM_OPORTUNIDADE`,
+`SEM_MAPEAMENTO`, `ERRO` — apontam cada um para uma causa e uma correção diferentes.
+
+#### Modo conferência, e por que ele é o padrão aqui
+
+⚠️ `solarsync.nectar.saida.somente-conferencia` é **`true` por padrão**, ao contrário do `ativo`.
+Mover a etapa é uma **escrita** no CRM da empresa, e o corpo do `PUT /oportunidades/{id}` não é
+documentado — o que se sabe dele veio de `OPTIONS`, que responde
+`allow: HEAD,DELETE,GET,OPTIONS,PUT`. Em conferência o job faz tudo (resolve o cliente, a etapa,
+consulta o CRM) e grava o que teria feito, sem o `PUT`. Conferida a trilha com dados reais,
+desligue.
+
+Daí também as duas decisões defensivas do cliente HTTP:
+
+- **lê, altera e devolve a oportunidade inteira**, em vez de mandar um corpo mínimo. Num `PUT` de
+  contrato não documentado, mandar só o que interessa é apostar que o servidor faz merge — e se
+  ele substituir, o negócio perde valor, responsável e campos personalizados de uma vez;
+- **os objetos de funil e etapa são copiados de `/pipelines`**, com todos os campos que o Nectar
+  põe neles. Montar `{"id": 288716}` e esperar que baste seria a mesma aposta um nível abaixo.
+
+Conferido em 22/09/2026 contra o CRM real, em modo conferência: o cliente ADEILTON (oportunidade
+29878256) estava na etapa 288714 e o SolarSync resolveu corretamente "PROJETO PARA FAZER" como
+destino, sem enviar nada.
+
 Ponto de atenção da etapa 1 do fluxo (seção 1): hoje o analista atualiza pendência resolvida em
 dois lugares (planilha + Trello). O SolarSync elimina a planilha; decidir depois se o Trello
 sai de cena ou vira mais um listener de saída.
@@ -1045,6 +1231,8 @@ histórico falha com 409. Desative em vez de apagar — é o caminho previsto.
 | `SOLARSYNC_DADOS_DE_EXEMPLO` | banco fica vazio (comportamento normal) |
 | `SOLARSYNC_CORS_ORIGENS` | `http://localhost:5173` |
 | `SOLARSYNC_NECTAR_ATIVO` / `_TOKEN` | integração com o CRM desligada: o job não existe e nenhum cliente entra sozinho (seção 9) |
+| `SOLARSYNC_NECTAR_SAIDA_ATIVO` | a etapa do cliente no Nectar não acompanha o projeto. Exige `_ATIVO` ligado também: é o mesmo host e o mesmo token |
+| `SOLARSYNC_NECTAR_SAIDA_SOMENTE_CONFERENCIA` | **verdadeiro** — o ensaio é o padrão, porque mover a etapa é escrita no CRM da empresa. Só desligue depois de conferir a trilha com dados reais |
 | `SOLARSYNC_GMAIL_ATIVO` / `_CLIENT_ID` / `_CLIENT_SECRET` / `_REFRESH_TOKEN` | leitura do e-mail da Coelba desligada: o job não existe e o status do projeto só muda pela tela |
 | `SOLARSYNC_GMAIL_SOMENTE_CONFERENCIA` | **falso** — o job aplica o status. Enquanto a redação real da Coelba não for conferida, esta é a variável que precisa estar em `true` (seção 9) |
 
@@ -1053,7 +1241,7 @@ construção do cliente e falha em toda execução. Deliberado: derrubar a aplic
 integração auxiliar mal configurada deixaria o sistema inteiro fora do ar por um e-mail não lido.
 
 **Dados de exemplo** (`SOLARSYNC_DADOS_DE_EXEMPLO=true`, só em dev): `exemplo/DadosDeExemplo`
-semeia 20 clientes cobrindo todos os estados do fluxo — pendência aberta/em andamento/resolvida/
+semeia 26 clientes cobrindo todos os estados do fluxo — pendência aberta/em andamento/resolvida/
 cancelada, projeto travado por débito, reprovado, reencaminhado, aprovado, instalado sem
 vistoria, ciclo completo com vistoria reprovada e reaprovada, e as duas filas de unificação.
 <p>
@@ -1157,6 +1345,17 @@ Coisas que funcionam como projetado, mas cujo efeito colateral vale ter em vista
 - **`email_coelba` fica órfã ao excluir projeto**, pela mesma razão e com o mesmo efeito de
   `historico_status`: sem FK em `projeto_id` de propósito, porque a FK faria `DELETE` de projeto
   falhar com 409 por causa da trilha da integração.
+- **Cliente do CRM importado antes de 22/09/2026 não vem marcado como Banco.** A etiqueta sai da
+  etapa de entrada da oportunidade, e essa etapa não sobrevive à importação — a oportunidade segue
+  andando no CRM. A V16 dá `banco = false` a todos os clientes existentes, e não há como a
+  migration deduzir quem veio da etapa de banco. Conferido na importação real: as 4 oportunidades
+  do funil "4- Nota Fiscal" já estavam no banco e continuaram sem a marca. A correção é o
+  checkbox no cadastro, cliente a cliente; a partir de agora os novos entram marcados sozinhos.
+- **A sincronização de etapa move o cliente, e o CRM pode ter regra própria sobre isso.** O
+  `PUT /oportunidades/{id}` não é documentado: pode haver etapa que exige proposta, campo
+  obrigatório ou permissão do usuário do token. Nada disso apareceu no ensaio (que não escreve),
+  e o primeiro `PUT` de verdade é onde se descobre. É o motivo de o modo conferência ser o padrão
+  e de a trilha guardar a mensagem da recusa.
 - **A integração só enxerga o retorno que chegou na caixa certa, e nem todo chega.** O e-mail de
   aprovação conferido em 19/09/2026 foi endereçado a `projetos.conectsolparaatodos` — com o "a"
   dobrado, erro de digitação do projetista ao cadastrar a solicitação no portal da Neoenergia. O
@@ -1250,10 +1449,86 @@ Levantadas e ainda sem resposta ao fim da sessão de 03–04/09/2026:
     `somente-conferencia=false` e `somente-projetos-conhecidos=true`
 18. Antes de ir ao ar: rate limit no `/api/auth/login` (item 11 do checklist — sem ele o BCrypt
     é vetor de DoS), HTTPS/TLS (item 12) e a auditoria de segurança (item 10)
-19. Integração de **saída** para o Nectar (refletir status de volta ao comercial) — a única da
-    seção 9 que falta, e a que o desenho de eventos deixa mais barata: um
-    `@TransactionalEventListener(AFTER_COMMIT)` sobre `EntidadeStatusEvent`, sem tocar em
-    `pendencia`/`projeto`. ⚠️ Cair na armadilha do `AFTER_COMMIT` da seção 3 se escrever no banco
+19. ~~Integração de **saída** para o Nectar~~ — **feita** (22/09/2026): a etapa do cliente no
+    CRM passa a seguir o status do projeto, com mapa próprio para o fluxo Banco (seção 9). Como
+    previsto, custou um listener e zero mudança em `pendencia`/`projeto`/`vistoria`. Está em modo
+    conferência por padrão; **o próximo passo é conferir a trilha `nectar_etapa_sincronizacao`
+    com dados reais e então desligar `somente-conferencia`** — é o primeiro `PUT` no CRM da
+    empresa, e o corpo dele não é documentado
 20. Listagem só-leitura de `email_coelba`, filtrada por `resultado` — hoje a trilha existe e
     ninguém tem como olhar sem acesso ao banco (seção 11). Vira urgente no dia em que alguém
     perguntar "por que este projeto foi reprovado ontem"
+21. **Rodada de 22/09/2026 (apresentação para a equipe de Projetos)** — feita: prioridade de
+    cliente com propagação da data de instalação para o projeto, fluxo curto "somente pendência",
+    débito futuro barrando o envio na véspera, etiqueta Banco vinda da etapa de entrada do CRM, e
+    a sincronização de saída acima. Migrations V16–V18
+22. **Backfill da etiqueta Banco** nos clientes importados antes de 22/09/2026 — hoje só o
+    checkbox no cadastro, cliente a cliente (seção 11)
+23. **Deploy de homologação (24/09/2026)** — os artefatos estão escritos (`Dockerfile`,
+    `deploy/`, seção 14); **falta o servidor**. O que trava: contratar o VPS e criar os dois
+    registros de DNS em `conectsol.com`. Nada disso é código
+24. **Ligar o Cloudflare na frente da API** (item 11 do checklist) — só depois de o primeiro
+    certificado ser emitido, senão o desafio do Let's Encrypt não chega ao Caddy
+
+## 14. Deploy
+
+Escrito em 24/09/2026 para o ambiente de **homologação** — a equipe de Projetos testando antes
+de a planilha ser substituída. O runbook passo a passo é o `deploy/README.md`; esta seção
+registra só as decisões e o porquê delas.
+
+```
+  navegador
+      ├── https://solarsync.conectsol.com ─────► Cloudflare Pages (estático, build do repo web)
+      └── https://api.solarsync.conectsol.com ─► VPS: caddy (:80/:443) → api (:8080) → postgres
+```
+
+**Um VPS com Docker Compose, e não Cloud Run**, apesar de o outro projeto da casa (o de
+devoluções) usar `gcloud run deploy --source` com Supabase. O que decide é o trabalho agendado:
+o job do Nectar a cada 10 min, o do Gmail a cada 15 e o reprocessamento da saída a cada 30. Em
+Cloud Run com escala a zero esses jobs **não rodam** quando não há requisição, e não rodam em
+silêncio — sem erro, sem log, os clientes só param de entrar. É exatamente a classe de falha que
+a seção 11 já cataloga duas vezes (o `pipeline` que ignora filtro, o domínio `neoenergia.com.br`
+que não casava com nada). Manter uma instância sempre ligada para contornar custa mais que o VPS
+e ainda exige banco gerenciado à parte.
+
+**O frontend não fica no VPS.** É `vite build` — arquivos estáticos —, e o Cloudflare Pages os
+serve com TLS, CDN e build a cada push, de graça. Isso deixa o servidor com uma responsabilidade
+só e adianta metade do item 11 do checklist. ⚠️ `VITE_API_URL` é lida **no build**
+(`src/api/client.ts`), não em tempo de execução: trocar o domínio da API exige um build novo, não
+um restart.
+
+**Caddy, e não nginx + certbot.** A renovação é a parte do par que mais dá trabalho manter, e um
+certificado vencido num domingo derruba o sistema inteiro. O Caddy emite e renova sozinho; o
+preço é uma imagem a mais que ninguém aqui conhece de cor.
+
+Quatro decisões que valem registro:
+
+- **Só o Caddy publica porta.** Postgres e API existem apenas na rede interna do compose. Expor
+  5432 num IP público é como o banco de um sistema interno costuma vazar.
+- **`SOLARSYNC_LOGIN_CONFIAR_EM_PROXY` é forçado a `true` no compose**, não deixado no `.env`.
+  Nesta pilha sempre há um proxy de verdade na frente; com `false`, toda requisição pareceria vir
+  do IP do container do Caddy e o limite de 60/15min por origem viraria global — o escritório
+  inteiro trancado porque uma pessoa errou a senha. É um dos dois erros silenciosos que a
+  seção 10 descreve, e a única forma de não cometê-lo é não deixar a escolha aberta.
+- **As três integrações ficam desligadas em homologação.** O job do Nectar lê o CRM de verdade da
+  empresa, o da saída **escreve** nele e o do Gmail lê a caixa real: ligados num ambiente de
+  teste, a equipe treinaria em cima de dados de produção e o CRM começaria a se mexer sozinho por
+  causa de um clique de ensaio.
+- **O container da API tem teto de memória** (`mem_limit`, 1536m por padrão). Sem ele, o
+  `-XX:MaxRAMPercentage=75` do Dockerfile é 75% da RAM do **servidor inteiro**, e a JVM passa a
+  contar com a memória do Postgres também. O sintoma seria o Postgres morrer por OOM sob carga,
+  longe da causa.
+- **`/actuator/health` existe agora** (dependência `spring-boot-starter-actuator`, exposição
+  restrita a `health` e sem detalhe). É o que o healthcheck do container consulta para o compose
+  saber que a aplicação **subiu**, e não só que a porta abriu — o Flyway roda antes do primeiro
+  OK. É `permitAll` no `SecurityConfig` porque o healthcheck roda sem token, e o Caddy responde
+  404 nele de fora: de dentro do container é diagnóstico, de fora é a confirmação de que o
+  sistema existe e de qual é o estado do banco.
+
+⚠️ **A imagem não roda os testes.** A suíte exige Docker (Testcontainers) e rodá-la dentro do
+build seria Docker dentro de Docker. `./mvnw test` é responsabilidade de quem publica, antes de
+subir — o `deploy/deploy.sh` diz isso em comentário, mas não tem como impor.
+
+⚠️ **O registro de DNS da API entra como "DNS only" (nuvem cinza) no Cloudflare.** Com o proxy
+ligado antes do primeiro certificado, o desafio do Let's Encrypt não chega ao Caddy e a emissão
+falha. O WAF do item 11 é ligar a nuvem laranja **depois**.

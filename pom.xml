@@ -38,6 +38,15 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-flyway</artifactId>
 		</dependency>
+		<!--
+			Só pelo /actuator/health: é o que o healthcheck do container consulta para o compose
+			saber que a aplicação subiu (e não só que a porta abriu) antes de o proxy mandar
+			tráfego. A exposição fica restrita a `health` em application.properties.
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>

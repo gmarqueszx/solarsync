@@ -1,2 +1,12 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+
+# Scripts e configuração que rodam no servidor Linux. Sem isto, um clone feito com
+# core.autocrlf=true gravaria CRLF e o shell falharia com "bad interpreter: /usr/bin/env bash^M"
+# — erro que não diz o que está errado.
+*.sh text eol=lf
+Dockerfile text eol=lf
+# O diretório inteiro, e não só os scripts: o .env.example é copiado para .env no servidor, e um
+# CRLF sobrevivente deixaria \r no FIM DO VALOR de cada variável — `ativo=false\r` não é `false`,
+# e o erro não aparece em lugar nenhum.
+deploy/** text eol=lf
