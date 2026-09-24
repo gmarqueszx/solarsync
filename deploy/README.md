@@ -67,17 +67,20 @@ ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw enable
 
 ### 3. O código no servidor
 
-> ⚠️ **Antes disto, o código precisa estar no GitHub na branch que o servidor vai clonar.** Hoje
-> a `main` dos dois repositórios tem só o commit inicial — o sistema inteiro vive em branches de
-> trabalho (`Plan` no backend, `hermit` no frontend) e boa parte nem está commitada. O servidor
-> clona uma branch; se for a `main` de agora, ele sobe um repositório vazio. Resolva isso
-> primeiro, ou troque o `-b` abaixo pela branch correta.
+A `main` é a branch de deploy: é ela que o servidor clona e é ela que o `deploy.sh` atualiza.
+O trabalho entra por PR da branch de desenvolvimento, como os PRs #1 e #2.
 
 ```sh
 mkdir -p /opt/solarsync && cd /opt/solarsync
 git clone -b main https://github.com/gmarqueszx/solarsync.git
 cd solarsync/deploy
 ```
+
+> O repositório é privado, então o `clone` pede autenticação. O caminho com menos manutenção é
+> uma **deploy key** somente-leitura: `ssh-keygen -t ed25519 -f ~/.ssh/solarsync -N ""` no
+> servidor, a chave pública colada em Settings → Deploy keys do repositório, e o clone por
+> `git@github.com:gmarqueszx/solarsync.git`. Um token pessoal também funciona, mas vence e leva
+> junto o acesso a todos os seus outros repositórios.
 
 ### 4. Segredos
 
