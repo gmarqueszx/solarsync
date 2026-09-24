@@ -1477,9 +1477,11 @@ de a planilha ser substituída. O runbook passo a passo é o `deploy/README.md`;
 registra só as decisões e o porquê delas.
 
 ```
-  navegador
-      ├── https://solarsync.conectsol.com ─────► Cloudflare Pages (estático, build do repo web)
-      └── https://api.solarsync.conectsol.com ─► VPS: caddy (:80/:443) → api (:8080) → postgres
+  navegador ── https://solarsync.conectsol.com ──► VPS
+                                                    ├── caddy  /      → estáticos da interface
+                                                    │          /api/* → proxy para a api
+                                                    ├── api      (:8080, rede interna)
+                                                    └── postgres (:5432, rede interna)
 ```
 
 **Um VPS com Docker Compose, e não Cloud Run**, apesar de o outro projeto da casa (o de
@@ -1491,11 +1493,29 @@ a seção 11 já cataloga duas vezes (o `pipeline` que ignora filtro, o domínio
 que não casava com nada). Manter uma instância sempre ligada para contornar custa mais que o VPS
 e ainda exige banco gerenciado à parte.
 
-**O frontend não fica no VPS.** É `vite build` — arquivos estáticos —, e o Cloudflare Pages os
-serve com TLS, CDN e build a cada push, de graça. Isso deixa o servidor com uma responsabilidade
-só e adianta metade do item 11 do checklist. ⚠️ `VITE_API_URL` é lida **no build**
-(`src/api/client.ts`), não em tempo de execução: trocar o domínio da API exige um build novo, não
-um restart.
+**Um domínio só, e é a decisão central do desenho.** A tela em `/` e a API em `/api/*` no mesmo
+host significa requisição de **mesma origem**: sem CORS, sem preflight, e sem uma lista de origens
+no servidor para alguém errar. Importa porque errar essa lista é o modo de falhar mais confuso que
+este sistema tem — a tela carrega perfeitamente e nenhuma requisição funciona, e o erro aparece
+só no console do navegador, porque do lado da API a requisição nem chega a ser processada.
+<p>
+⚠️ Isto **reverteu** o desenho anterior, em que o frontend ia para o Cloudflare Pages e a API para
+`api.solarsync.conectsol.com`. O Pages dava CDN e build automático de graça, mas comprava
+exatamente aquele risco de CORS — e o CDN quase não paga, porque só acelera o primeiro
+carregamento: toda interação depois vai ao VPS de qualquer jeito. Para dez pessoas internas, um
+domínio, um deploy e nenhuma conta de terceiro valem mais.
+<p>
+**Duas imagens, dois repositórios, e o Caddy sai do repositório do frontend.** A imagem do
+`solarsync-web` é um Caddy com o `dist` do Vite dentro; a configuração dele (`deploy/Caddyfile`)
+continua aqui, montada pelo compose. Cada repositório sabe construir a si mesmo, e o desenho da
+pilha fica num lugar só. O preço é o compose precisar do clone do frontend **ao lado** deste
+(`SOLARSYNC_FRONT_CAMINHO`), e o `deploy.sh` atualizar os dois — atualizar só um publicaria
+backend novo com a tela velha, e nada acusaria, porque tudo sobe saudável.
+<p>
+Consequência no cliente HTTP: `BASE_URL` é **vazio** em produção (`src/api/client.ts`), e o
+`new URL` ganhou `window.location.origin` como base — sem isso, caminho relativo estoura com
+"Invalid URL". `VITE_API_URL` continua existindo para apontar para outro servidor, e continua
+sendo lida no build; a diferença é que agora ninguém precisa dela.
 
 **Caddy, e não nginx + certbot.** A renovação é a parte do par que mais dá trabalho manter, e um
 certificado vencido num domingo derruba o sistema inteiro. O Caddy emite e renova sozinho; o

@@ -1,4 +1,10 @@
-# Proxy reverso e terminação TLS da API do SolarSync (item 12 do checklist da seção 8).
+# A porta de entrada do SolarSync: TLS, os arquivos da interface e o proxy para a API — tudo
+# num domínio só (item 12 do checklist da seção 8).
+#
+# **Mesma origem de propósito.** A tela em `/` e a API em `/api/*` no mesmo host significa
+# requisição sem CORS: sem preflight, sem lista de origens no servidor, e sem o erro mais comum
+# de todos, que é a tela carregar e nenhuma requisição funcionar porque a origem publicada não
+# bate com a configurada.
 #
 # O Caddy pede e renova o certificado do Let's Encrypt sozinho, por isso ele está aqui no lugar
 # de nginx + certbot: o par que mais dá trabalho manter é justamente a renovação, e um
@@ -12,8 +18,11 @@
 	email {$SOLARSYNC_ACME_EMAIL}
 }
 
-{$SOLARSYNC_API_DOMINIO} {
+{$SOLARSYNC_DOMINIO} {
 	encode zstd gzip
+
+	# A ordem dos `handle` é a ordem em que aparecem, e o primeiro que casa vence — então as duas
+	# regras específicas vêm antes do catch-all que serve a interface.
 
 	# O /actuator/health existe para o healthcheck do container, que roda em localhost dentro do
 	# container da API e não passa por aqui. De fora não há motivo para alcançá-lo: ele confirma
@@ -22,7 +31,7 @@
 		respond 404
 	}
 
-	handle {
+	handle /api/* {
 		reverse_proxy api:8080 {
 			# O Caddy já preenche X-Forwarded-For com o IP de quem conectou. É desse cabeçalho
 			# que sai o limite de tentativas por origem (SOLARSYNC_LOGIN_CONFIAR_EM_PROXY=true
@@ -31,16 +40,34 @@
 		}
 	}
 
+	handle {
+		root * /srv
+		# `try_files` devolvendo o index.html é o que faz um F5 em qualquer endereço funcionar.
+		# Hoje a navegação entre módulos é estado e não URL, então nada depende disto — mas no dia
+		# em que entrar um roteador no frontend, a alternativa é 404 em toda página recarregada,
+		# e o sintoma não aponta para cá.
+		try_files {path} /index.html
+		file_server
+	}
+
 	header {
-		# A API só deve ser alcançada por HTTPS. Um ano, sem subdomínios: o preload e o
+		# O sistema só deve ser alcançado por HTTPS. Um ano, sem subdomínios: o preload e o
 		# includeSubDomains ficam de fora enquanto conectsol.com servir outras coisas.
 		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
-		# Resposta de API nunca é renderizada em frame; e o frontend está noutro domínio.
 		X-Frame-Options "DENY"
-		Referrer-Policy "no-referrer"
+		Referrer-Policy "same-origin"
 		-Server
 	}
+
+	# O index.html nunca fica em cache: é ele que aponta para os arquivos com hash no nome, então
+	# um index velho no navegador serve a versão anterior do sistema depois de um deploy — e a
+	# pessoa vê um bug já corrigido sem ter como saber por quê. Os assets, que têm hash, podem
+	# ficar em cache para sempre.
+	@index path / /index.html
+	header @index Cache-Control "no-cache"
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
 
 	log {
 		output stdout

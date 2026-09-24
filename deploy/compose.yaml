@@ -1,7 +1,9 @@
-# Pilha do SolarSync num servidor só: Postgres, API e o proxy reverso que termina o TLS.
+# Pilha do SolarSync num servidor só: Postgres, API, e o Caddy que termina o TLS, serve a
+# interface e faz proxy da API — tudo num domínio só.
 #
 # Rode daqui de dentro:  cd deploy && docker compose up -d --build
 # Os segredos vêm de ./.env, que não está no Git — copie o .env.example ao lado.
+# O build precisa do clone do frontend ao lado deste repositório (ver o serviço `caddy`).
 #
 # ⚠️ Só o Caddy publica porta. O Postgres e a API existem apenas na rede interna do compose:
 # expor 5432 num VPS com IP público é como o banco de um sistema interno costuma vazar, e a API
@@ -69,8 +71,19 @@ services:
       # unhealthy nesse meio-tempo derrubaria o container em loop.
       start_period: 90s
 
+  # Serve a interface e faz proxy de /api/* para a API — no mesmo domínio, que é o que elimina o
+  # CORS. A imagem sai do repositório do frontend: ela é um Caddy com o `dist` dentro. A
+  # configuração, essa continua aqui, montada de deploy/Caddyfile.
+  #
+  # ⚠️ O contexto aponta para um clone IRMÃO do solarsync-web, ao lado deste repositório:
+  #   /opt/solarsync/solarsync/        (este)
+  #   /opt/solarsync/solarsync-front/  (o do frontend)
+  # Sem ele, `docker compose build` falha dizendo que o caminho não existe. Ver deploy/README.md.
   caddy:
-    image: caddy:2-alpine
+    build:
+      context: ${SOLARSYNC_FRONT_CAMINHO:-../../solarsync-front}
+      dockerfile: Dockerfile
+    image: solarsync-web:${SOLARSYNC_VERSAO:-local}
     restart: unless-stopped
     depends_on:
       - api
@@ -78,7 +91,7 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      SOLARSYNC_API_DOMINIO: ${SOLARSYNC_API_DOMINIO:?defina SOLARSYNC_API_DOMINIO no .env}
+      SOLARSYNC_DOMINIO: ${SOLARSYNC_DOMINIO:?defina SOLARSYNC_DOMINIO no .env}
       SOLARSYNC_ACME_EMAIL: ${SOLARSYNC_ACME_EMAIL:?defina SOLARSYNC_ACME_EMAIL no .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
