@@ -29,9 +29,12 @@ class NectarPropertiesTest {
     @Test
     void asEtapasPadraoSaoAsDuasDaConectsol() {
         assertThat(PADRAO.etapasDeEntrada()).containsExactly(
-                new EtapaDeEntrada("5- Financeiro", "VALIDADO PELO FINANCEIRO"),
+                new EtapaDeEntrada("5- Financeiro", "VALIDADO PELO FINANCEIRO", false),
+                // A segunda etapa de entrada e a dos clientes de banco: e daqui que sai a
+                // etiqueta "Banco" do cliente, e com ela a etapa de destino no Nectar quando o
+                // projeto for aprovado.
                 new EtapaDeEntrada("4- Nota Fiscal",
-                        "ADIANTAR PROJETO COELBA PARA BANCO OU VENDEDOR"));
+                        "ADIANTAR PROJETO COELBA PARA BANCO OU VENDEDOR", true));
     }
 
     @Test
@@ -73,7 +76,7 @@ class NectarPropertiesTest {
                 .isTrue();
 
         NectarProperties comAcento = new NectarProperties(false, null, null,
-                List.of(new EtapaDeEntrada("7- Instalação", "APROVAÇÃO")), null, null, 0, 0);
+                List.of(new EtapaDeEntrada("7- Instalação", "APROVAÇÃO", false)), null, null, 0, 0);
         assertThat(comAcento.ehEtapaDeEntrada(oportunidade("7- instalacao", "aprovacao")))
                 .isTrue();
     }
@@ -89,8 +92,8 @@ class NectarPropertiesTest {
     @Test
     void funisAConsultarNaoRepeteOMesmoFunil() {
         NectarProperties duasDoMesmoFunil = new NectarProperties(false, null, null, List.of(
-                new EtapaDeEntrada("5- Financeiro", "VALIDADO PELO FINANCEIRO"),
-                new EtapaDeEntrada("5- Financeiro", "Pendente")), null, null, 0, 0);
+                new EtapaDeEntrada("5- Financeiro", "VALIDADO PELO FINANCEIRO", false),
+                new EtapaDeEntrada("5- Financeiro", "Pendente", false)), null, null, 0, 0);
 
         assertThat(duasDoMesmoFunil.funisAConsultar()).containsExactly("5- Financeiro");
         assertThat(duasDoMesmoFunil.etapasDoFunil("5- Financeiro"))

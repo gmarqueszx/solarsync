@@ -22,11 +22,14 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
+import com.conectsol.solarsync.common.exception.ClienteSomentePendenciaException;
 import com.conectsol.solarsync.common.exception.CredenciaisInvalidasException;
 import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
 import com.conectsol.solarsync.common.exception.LimiteDeTentativasException;
 import com.conectsol.solarsync.common.exception.NumeroSolicitacaoObrigatorioException;
+import com.conectsol.solarsync.common.exception.PrioridadeSemInstalacaoException;
 import com.conectsol.solarsync.common.exception.ProjetoSemInstalacaoException;
+import com.conectsol.solarsync.common.exception.ProximoDebitoAVencerException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
 import com.conectsol.solarsync.common.exception.UnificacaoNaoFeitaException;
 import com.conectsol.solarsync.common.exception.UsuarioNaoAutorizadoException;
@@ -78,6 +81,25 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(DebitoNaoConsultadoException.class)
     ProblemDetail debitoNaoConsultado(DebitoNaoConsultadoException excecao) {
         return problema(HttpStatus.CONFLICT, "DEBITO_NAO_CONSULTADO", excecao.getMessage());
+    }
+
+    /**
+     * Terceira recusa do envio à Coelba, ao lado de CLIENTE_COM_DEBITO e DEBITO_NAO_CONSULTADO.
+     * Código próprio porque a ação que ela pede é diferente das outras duas: esperar, não cobrar.
+     */
+    @ExceptionHandler(ProximoDebitoAVencerException.class)
+    ProblemDetail proximoDebitoAVencer(ProximoDebitoAVencerException excecao) {
+        return problema(HttpStatus.CONFLICT, "PROXIMO_DEBITO_A_VENCER", excecao.getMessage());
+    }
+
+    @ExceptionHandler(ClienteSomentePendenciaException.class)
+    ProblemDetail clienteSomentePendencia(ClienteSomentePendenciaException excecao) {
+        return problema(HttpStatus.CONFLICT, "CLIENTE_SOMENTE_PENDENCIA", excecao.getMessage());
+    }
+
+    @ExceptionHandler(PrioridadeSemInstalacaoException.class)
+    ProblemDetail prioridadeSemInstalacao(PrioridadeSemInstalacaoException excecao) {
+        return problema(HttpStatus.CONFLICT, "PRIORIDADE_SEM_INSTALACAO", excecao.getMessage());
     }
 
     @ExceptionHandler(UnificacaoNaoFeitaException.class)

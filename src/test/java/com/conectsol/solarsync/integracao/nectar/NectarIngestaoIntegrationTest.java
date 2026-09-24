@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
+import com.conectsol.solarsync.cliente.EtiquetaCliente;
 import com.conectsol.solarsync.cliente.StatusTriagem;
 import com.conectsol.solarsync.common.AbstractIntegrationTest;
 import com.conectsol.solarsync.projeto.ProjetoRepository;
@@ -216,6 +217,47 @@ class NectarIngestaoIntegrationTest extends AbstractIntegrationTest {
 
         assertThat(ingestaoService.ingerir(nomeEnorme)).isTrue();
         assertThat(umCliente().getNome()).hasSize(150);
+    }
+
+    /**
+     * A etiqueta "Banco" sai da <b>etapa de entrada</b> por onde a oportunidade chegou, e não de
+     * um campo do CRM: a etapa "ADIANTAR PROJETO COELBA PARA BANCO OU VENDEDOR" é a porta dos
+     * projetos financiados. Precisa virar dado do cliente aqui porque a etapa de origem não
+     * sobrevive à importação — a oportunidade segue andando no Nectar.
+     */
+    @Test
+    void oportunidadeDaEtapaDeBancoMarcaOClienteComoBanco() {
+        ingestaoService.ingerir(joseNeri(29396646L));
+
+        Cliente cliente = umCliente();
+        assertThat(cliente.isBanco()).isTrue();
+        // As duas etiquetas, e sem repetição: derivadas, não armazenadas.
+        assertThat(EtiquetaCliente.de(cliente))
+                .containsExactly(EtiquetaCliente.CRM, EtiquetaCliente.BANCO);
+    }
+
+    /** A outra porta — "5- Financeiro" — é a do cliente que paga do próprio bolso. */
+    @Test
+    void oportunidadeDaEtapaNormalNaoVemMarcadaComoBanco() {
+        ingestaoService.ingerir(hudson());
+
+        Cliente cliente = umCliente();
+        assertThat(cliente.isBanco()).isFalse();
+        assertThat(EtiquetaCliente.de(cliente)).containsExactly(EtiquetaCliente.CRM);
+    }
+
+    /**
+     * Reimportar não duplica etiqueta porque não há etiqueta para duplicar: elas são derivadas a
+     * cada leitura. É o que torna o requisito "não duplicar etiquetas caso a operação seja
+     * executada novamente" impossível de violar, em vez de dependente de uma checagem.
+     */
+    @Test
+    void reimportarNaoDuplicaEtiquetas() {
+        ingestaoService.ingerir(joseNeri(29396646L));
+        ingestaoService.ingerir(joseNeri(29396646L));
+
+        assertThat(EtiquetaCliente.de(umCliente()))
+                .containsExactly(EtiquetaCliente.CRM, EtiquetaCliente.BANCO);
     }
 
     /** Oportunidade real 29839213, funil "5- Financeiro", em VALIDADO PELO FINANCEIRO. */

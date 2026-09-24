@@ -4,6 +4,7 @@ import java.text.Normalizer;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -53,8 +54,13 @@ public record NectarProperties(
      *
      * @param funil nome exato do funil, como aparece no painel ("5- Financeiro")
      * @param etapa nome da etapa dentro dele ("VALIDADO PELO FINANCEIRO")
+     * @param banco a etapa identifica cliente de financiamento bancário. É <b>daqui</b> que sai a
+     *              etiqueta "Banco" do cliente: a etapa de origem no CRM não sobrevive à
+     *              importação (a oportunidade segue andando lá), então o que ela significa
+     *              precisa virar um dado do cliente na hora em que ele entra. Só muda uma coisa,
+     *              e fora do SolarSync — a etapa para onde o projeto aprovado volta no Nectar
      */
-    public record EtapaDeEntrada(String funil, String etapa) {
+    public record EtapaDeEntrada(String funil, String etapa, boolean banco) {
     }
 
     /**
@@ -63,8 +69,9 @@ public record NectarProperties(
      * preferência de ambiente — um deploy sem elas importaria da etapa errada em silêncio.
      */
     private static final List<EtapaDeEntrada> ETAPAS_PADRAO = List.of(
-            new EtapaDeEntrada("5- Financeiro", "VALIDADO PELO FINANCEIRO"),
-            new EtapaDeEntrada("4- Nota Fiscal", "ADIANTAR PROJETO COELBA PARA BANCO OU VENDEDOR"));
+            new EtapaDeEntrada("5- Financeiro", "VALIDADO PELO FINANCEIRO", false),
+            new EtapaDeEntrada("4- Nota Fiscal", "ADIANTAR PROJETO COELBA PARA BANCO OU VENDEDOR",
+                    true));
 
     public NectarProperties {
         baseUrl = baseUrl == null || baseUrl.isBlank()
@@ -88,9 +95,19 @@ public record NectarProperties(
      * um cliente que nunca aparece na fila da triagem, sem erro nenhum em lugar algum.
      */
     boolean ehEtapaDeEntrada(OportunidadeNectar oportunidade) {
-        return etapasDeEntrada.stream().anyMatch(entrada ->
-                mesmoTexto(entrada.funil(), oportunidade.nomeDoFunil())
-                        && mesmoTexto(entrada.etapa(), oportunidade.etapaNome()));
+        return entradaDe(oportunidade).isPresent();
+    }
+
+    /**
+     * Qual etapa de entrada casou com esta oportunidade. Devolve a etapa, e não um booleano, porque
+     * quem importa precisa de mais do que "entra ou não entra": precisa saber se aquela porta é a
+     * dos clientes de banco.
+     */
+    Optional<EtapaDeEntrada> entradaDe(OportunidadeNectar oportunidade) {
+        return etapasDeEntrada.stream()
+                .filter(entrada -> mesmoTexto(entrada.funil(), oportunidade.nomeDoFunil())
+                        && mesmoTexto(entrada.etapa(), oportunidade.etapaNome()))
+                .findFirst();
     }
 
     /** Os funis a consultar, sem repetição — duas etapas do mesmo funil dão uma consulta só. */

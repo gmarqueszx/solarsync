@@ -1,6 +1,7 @@
 package com.conectsol.solarsync.debito;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 import com.conectsol.solarsync.auth.Usuario;
 import com.conectsol.solarsync.cliente.Cliente;
@@ -65,6 +66,21 @@ public class Debito extends BaseEntity {
     /** Preenchido na quitação; {@code detectadoEm} é mantido, para o par sobreviver na tela. */
     @Column(name = "quitado_em")
     private Instant quitadoEm;
+
+    /**
+     * Vencimento da <b>próxima</b> conta, informado na consulta que constatou a quitação. É o
+     * problema que a equipe levantou: o cliente pode estar quitado hoje e ter conta vencendo
+     * amanhã, e o projeto encaminhado nessa véspera volta reprovado — quando a Coelba for
+     * analisar, já existe débito.
+     * <p>
+     * Opcional de propósito: nem toda consulta revela a próxima data, e "não informado" é um
+     * estado legítimo que a tela mostra como tal. Inventar uma data seria pior que não ter.
+     * <p>
+     * Só faz sentido com o débito {@code QUITADO} — quando ele volta a {@code ATIVO} o
+     * {@code DebitoService} zera este campo, porque a próxima conta virou a atual.
+     */
+    @Column(name = "proximo_vencimento")
+    private LocalDate proximoVencimento;
 
     @ManyToOne
     @JoinColumn(name = "consultado_por_id")

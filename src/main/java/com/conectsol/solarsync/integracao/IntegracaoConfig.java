@@ -11,6 +11,7 @@ import org.springframework.web.client.RestClient;
 import com.conectsol.solarsync.integracao.gmail.CoelbaProperties;
 import com.conectsol.solarsync.integracao.gmail.GmailProperties;
 import com.conectsol.solarsync.integracao.nectar.NectarProperties;
+import com.conectsol.solarsync.integracao.nectar.NectarSaidaProperties;
 
 /**
  * Liga o agendador das integrações de entrada (seção 9 do CLAUDE.md) e provê o construtor de
@@ -25,6 +26,7 @@ import com.conectsol.solarsync.integracao.nectar.NectarProperties;
 @EnableScheduling
 @EnableConfigurationProperties({
         NectarProperties.class,
+        NectarSaidaProperties.class,
         GmailProperties.class,
         CoelbaProperties.class })
 public class IntegracaoConfig {

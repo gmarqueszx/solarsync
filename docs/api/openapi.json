@@ -96,6 +96,16 @@
               }
             },
             "description" : "Credenciais inválidas"
+          },
+          "429" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description" : "Tentativas demais; veja Retry-After"
           }
         },
         "summary" : "Login com e-mail e senha",
@@ -322,6 +332,74 @@
           }
         },
         "summary" : "Linha do tempo da triagem de pendência do cliente",
+        "tags" : [ "Clientes" ]
+      }
+    },
+    "/api/clientes/{id}/prioridade" : {
+      "post" : {
+        "description" : "O cliente passa a aparecer no topo da fila da etapa em que estiver, e continua no topo das etapas seguintes até a prioridade ser encerrada. Chamar de novo revisa o motivo, sem apagar quem pediu primeiro. Com motivo INSTALACAO_ADIANTADA a data de instalação é obrigatória (409 PRIORIDADE_SEM_INSTALACAO) e desce para o projeto do cliente — é a mesma data que a etapa de vistoria exige, não uma segunda.",
+        "operationId" : "marcarPrioridade",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PrioridadeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ClienteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Marca o cliente como prioritário",
+        "tags" : [ "Clientes" ]
+      }
+    },
+    "/api/clientes/{id}/remover-prioridade" : {
+      "post" : {
+        "description" : "Ele volta ao comportamento normal de ordenação. A data de instalação já registrada no projeto permanece: ela é fato de campo, não privilégio.",
+        "operationId" : "removerPrioridade",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ClienteResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Encerra a prioridade do cliente",
         "tags" : [ "Clientes" ]
       }
     },
@@ -2182,6 +2260,9 @@
       "ClienteRequest" : {
         "type" : "object",
         "properties" : {
+          "banco" : {
+            "type" : "boolean"
+          },
           "cidade" : {
             "type" : "string",
             "maxLength" : 100,
@@ -2195,6 +2276,9 @@
             "type" : "string",
             "maxLength" : 150,
             "minLength" : 0
+          },
+          "somentePendencia" : {
+            "type" : "boolean"
           },
           "telefone" : {
             "type" : "string",
@@ -2217,12 +2301,22 @@
       "ClienteResponse" : {
         "type" : "object",
         "properties" : {
+          "banco" : {
+            "type" : "boolean"
+          },
           "cidade" : {
             "type" : "string"
           },
           "dataPagamento" : {
             "type" : "string",
             "format" : "date"
+          },
+          "etiquetas" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "CRM", "BANCO" ]
+            }
           },
           "id" : {
             "type" : "integer",
@@ -2237,6 +2331,30 @@
           "origem" : {
             "type" : "string",
             "enum" : [ "MANUAL", "CRM_NECTAR" ]
+          },
+          "prioridade" : {
+            "type" : "boolean"
+          },
+          "prioridadeDataInstalacao" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "prioridadeDefinidaEm" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "prioridadeDefinidaPor" : {
+            "$ref" : "#/components/schemas/UsuarioResumoResponse"
+          },
+          "prioridadeMotivo" : {
+            "type" : "string",
+            "enum" : [ "INSTALACAO_ADIANTADA", "PRAZO_CONTRATUAL", "PRAZO_DO_CLIENTE", "OUTRO" ]
+          },
+          "prioridadeObservacao" : {
+            "type" : "string"
+          },
+          "somentePendencia" : {
+            "type" : "boolean"
           },
           "statusTriagem" : {
             "type" : "string",
@@ -2265,6 +2383,12 @@
           },
           "nome" : {
             "type" : "string"
+          },
+          "prioridade" : {
+            "type" : "boolean"
+          },
+          "somentePendencia" : {
+            "type" : "boolean"
           },
           "ucCoelba" : {
             "type" : "string"
@@ -2354,6 +2478,10 @@
             "type" : "string",
             "format" : "date-time"
           },
+          "proximoVencimento" : {
+            "type" : "string",
+            "format" : "date"
+          },
           "status" : {
             "type" : "string",
             "enum" : [ "ATIVO", "QUITADO" ]
@@ -2393,6 +2521,10 @@
           "id" : {
             "type" : "integer",
             "format" : "int64"
+          },
+          "proximoVencimento" : {
+            "type" : "string",
+            "format" : "date"
           },
           "quitadoEm" : {
             "type" : "string",
@@ -2845,6 +2977,9 @@
           "clienteNome" : {
             "type" : "string"
           },
+          "clientePrioritario" : {
+            "type" : "boolean"
+          },
           "id" : {
             "type" : "integer",
             "format" : "int64"
@@ -2886,6 +3021,25 @@
             "format" : "date"
           }
         }
+      },
+      "PrioridadeRequest" : {
+        "type" : "object",
+        "properties" : {
+          "dataInstalacao" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "motivo" : {
+            "type" : "string",
+            "enum" : [ "INSTALACAO_ADIANTADA", "PRAZO_CONTRATUAL", "PRAZO_DO_CLIENTE", "OUTRO" ]
+          },
+          "observacao" : {
+            "type" : "string",
+            "maxLength" : 500,
+            "minLength" : 0
+          }
+        },
+        "required" : [ "motivo" ]
       },
       "ProjetoAprovarRequest" : {
         "type" : "object",
@@ -3101,12 +3255,18 @@
           "analistaResponsavelNome" : {
             "type" : "string"
           },
+          "clienteBanco" : {
+            "type" : "boolean"
+          },
           "clienteId" : {
             "type" : "integer",
             "format" : "int64"
           },
           "clienteNome" : {
             "type" : "string"
+          },
+          "clientePrioritario" : {
+            "type" : "boolean"
           },
           "dataAprovacao" : {
             "type" : "string",

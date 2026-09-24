@@ -15,6 +15,7 @@ import com.conectsol.solarsync.cliente.ClienteRepository;
 import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
 import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
+import com.conectsol.solarsync.common.web.PrioridadePrimeiro;
 import com.conectsol.solarsync.debito.DebitoService;
 import com.conectsol.solarsync.debito.TipoDebito;
 import com.conectsol.solarsync.pendencia.dto.PendenciaAtualizarRequest;
@@ -42,7 +43,8 @@ public class PendenciaService {
 
     @Transactional(readOnly = true)
     public Page<Pendencia> listar(PendenciaFiltro filtro, Pageable paginacao) {
-        return pendenciaRepository.findAll(PendenciaSpecs.de(filtro), paginacao);
+        return pendenciaRepository.findAll(PendenciaSpecs.de(filtro),
+                PrioridadePrimeiro.aplicar(paginacao, "cliente.prioridade"));
     }
 
     @Transactional(readOnly = true)

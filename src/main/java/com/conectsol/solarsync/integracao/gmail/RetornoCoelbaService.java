@@ -2,7 +2,6 @@ package com.conectsol.solarsync.integracao.gmail;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 
 import org.slf4j.Logger;
@@ -10,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import com.conectsol.solarsync.common.FusoDaOperacao;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
 import com.conectsol.solarsync.integracao.UsuarioIntegracao;
 import com.conectsol.solarsync.projeto.Projeto;
@@ -42,13 +42,6 @@ import lombok.RequiredArgsConstructor;
 public class RetornoCoelbaService {
 
     private static final Logger log = LoggerFactory.getLogger(RetornoCoelbaService.class);
-
-    /**
-     * A Coelba é da Bahia, e a data do e-mail vira a data de aprovação do projeto — um e-mail das
-     * 22h de terça em UTC cairia na quarta e a métrica de tempo até aprovação nasceria com um dia
-     * a mais.
-     */
-    private static final ZoneId FUSO = ZoneId.of("America/Bahia");
 
     /** Os dois status em que o projeto está esperando resposta da Coelba. */
     private static final List<StatusProjeto> AGUARDANDO_RETORNO =
@@ -272,7 +265,7 @@ public class RetornoCoelbaService {
 
     /** Nula quando o Gmail não informou a data; o {@code ProjetoService} então usa hoje. */
     private static LocalDate dataDo(Instant recebidoEm) {
-        return recebidoEm == null ? null : recebidoEm.atZone(FUSO).toLocalDate();
+        return recebidoEm == null ? null : recebidoEm.atZone(FusoDaOperacao.ZONA).toLocalDate();
     }
 
     private void gravar(MensagemGmail mensagem, Registro registro) {

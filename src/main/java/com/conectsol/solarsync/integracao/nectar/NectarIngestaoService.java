@@ -81,6 +81,15 @@ public class NectarIngestaoService {
         avisarSeNaoCasou("cidade", oportunidade.cidadeDoCliente(), cidade, oportunidade.id());
         avisarSeNaoCasou("vendedor", oportunidade.nomeDoVendedor(), vendedor, oportunidade.id());
 
+        // A etapa por onde a oportunidade entrou é o que diz se o projeto é de banco, e ela não
+        // sobrevive à importação — a oportunidade segue andando no CRM. Por isso vira um dado do
+        // cliente aqui, na única hora em que ainda se sabe. É de onde sai a etiqueta "Banco" que
+        // acompanha o selo "CRM" na triagem, e é o que faz o projeto aprovado voltar para a etapa
+        // de banco do Nectar em vez da normal.
+        boolean banco = propriedades.entradaDe(oportunidade)
+                .map(NectarProperties.EtapaDeEntrada::banco)
+                .orElse(false);
+
         ClienteRequest requisicao = new ClienteRequest(
                 truncar(nome, MAXIMO_NOME),
                 truncar(cidade, MAXIMO_CIDADE),
@@ -89,15 +98,20 @@ public class NectarIngestaoService {
                 // A UC da Coelba não vem do CRM: ela é descoberta justamente na checagem da
                 // etapa 1, por quem consulta a agência virtual. Nasce nula e é preenchida lá.
                 null,
-                truncar(oportunidade.telefoneDoCliente(), MAXIMO_TELEFONE));
+                truncar(oportunidade.telefoneDoCliente(), MAXIMO_TELEFONE),
+                // O CRM não sabe distinguir o cliente avulso mandado só para resolver pendência;
+                // quem marca isso é o gestor, na triagem.
+                false,
+                banco);
 
         try {
             boolean criado = clienteService
                     .criarDoNectar(requisicao, String.valueOf(oportunidade.id()))
                     .isPresent();
             if (criado) {
-                log.info("Cliente criado a partir da oportunidade {} do Nectar ({}): {}",
-                        oportunidade.id(), oportunidade.etapaNome(), requisicao.nome());
+                log.info("Cliente criado a partir da oportunidade {} do Nectar ({}): {}{}",
+                        oportunidade.id(), oportunidade.etapaNome(), requisicao.nome(),
+                        banco ? " [Banco]" : "");
             }
             return criado;
         } catch (DataIntegrityViolationException corrida) {
