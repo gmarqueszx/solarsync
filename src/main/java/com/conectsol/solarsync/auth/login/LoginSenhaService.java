@@ -55,6 +55,12 @@ public class LoginSenhaService {
         }
 
         Usuario usuario = encontrado.get();
+        if (usuario.isContaSistema()) {
+            // Antes do BCrypt de propósito: a conta de integração não entra com senha nenhuma,
+            // nem se alguém tiver gravado uma direto no banco (achado A-01 da auditoria).
+            log.warn("Login recusado: conta de sistema ({})", emailNormalizado);
+            throw new CredenciaisInvalidasException();
+        }
         if (!usuario.isAtivo()) {
             log.warn("Login recusado: usuário inativo ({})", emailNormalizado);
             throw new CredenciaisInvalidasException();

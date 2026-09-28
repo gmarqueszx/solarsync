@@ -6,5 +6,7 @@ public enum EntidadeTipo {
     DEBITO,
     PROJETO,
     VISTORIA,
-    UNIFICACAO
+    UNIFICACAO,
+    /** Gestão de usuários (V19): ativação, senha e papéis. Fora de toda métrica do dashboard. */
+    USUARIO
 }

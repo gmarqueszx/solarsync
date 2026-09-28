@@ -24,6 +24,7 @@ import com.conectsol.solarsync.common.security.GerenciaUsuarios;
 import com.conectsol.solarsync.common.security.PodeLer;
 import com.conectsol.solarsync.common.security.SomenteAdministrador;
 import com.conectsol.solarsync.common.security.UsuarioAutenticado;
+import com.conectsol.solarsync.historico.dto.HistoricoStatusResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -61,6 +62,17 @@ public class UsuarioController {
         return usuarioService.buscar(id);
     }
 
+    @GetMapping("/{id}/historico")
+    @GerenciaUsuarios
+    @Operation(
+            summary = "Trilha da gestão deste usuário",
+            description = "Criação, ativação/desativação, senha redefinida, e-mail e papéis "
+                    + "alterados — com o autor e o instante de cada um. Só leitura: a trilha é "
+                    + "escrita pelo listener de auditoria.")
+    public List<HistoricoStatusResponse> historico(@PathVariable Long id) {
+        return usuarioService.historico(id);
+    }
+
     @PostMapping
     @GerenciaUsuarios
     @Operation(
@@ -82,7 +94,8 @@ public class UsuarioController {
     @PutMapping("/{id}")
     @GerenciaUsuarios
     @Operation(summary = "Edita nome, e-mail e papéis; a senha tem endpoint próprio")
-    @ApiResponse(responseCode = "403", description = "GESTOR tentando alterar um ADMINISTRADOR")
+    @ApiResponse(responseCode = "403",
+            description = "GESTOR tentando alterar um ADMINISTRADOR, ou alvo é conta de sistema")
     public UsuarioResponse atualizar(@PathVariable Long id,
             @RequestBody @Valid UsuarioAtualizarRequest requisicao,
             @Autenticado UsuarioAutenticado autor) {

@@ -48,6 +48,23 @@ $ErrorActionPreference = 'Stop'
 $redirecionamento = "http://localhost:$Porta/"
 $escopo = 'https://www.googleapis.com/auth/gmail.readonly'
 
+# state e PKCE (S256): qualquer processo da maquina alcanca o localhost, entao sem eles uma
+# pagina aberta no navegador poderia chamar o redirecionamento com um codigo dela e o script
+# guardaria o refresh token da caixa ERRADA. O state amarra o retorno a esta execucao; o PKCE
+# faz um codigo interceptado nao valer nada sem o verificador, que nunca sai deste processo.
+function Get-Base64Url([byte[]] $bytes) {
+    [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+}
+$gerador = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+$bytesState = New-Object byte[] 32
+$bytesVerificador = New-Object byte[] 32
+$gerador.GetBytes($bytesState)
+$gerador.GetBytes($bytesVerificador)
+$state = Get-Base64Url $bytesState
+$verificador = Get-Base64Url $bytesVerificador
+$sha256 = [System.Security.Cryptography.SHA256]::Create()
+$desafio = Get-Base64Url ($sha256.ComputeHash([System.Text.Encoding]::ASCII.GetBytes($verificador)))
+
 # access_type=offline e o que faz o Google devolver um refresh token; prompt=consent forca a
 # tela de consentimento mesmo se a conta ja autorizou antes -- sem ele, uma segunda execucao
 # devolve so o access token e o refresh_token vem vazio, que e a pegadinha classica aqui.
@@ -58,6 +75,9 @@ $parametros = @(
     "scope=$([uri]::EscapeDataString($escopo))"
     "access_type=offline"
     "prompt=consent"
+    "state=$state"
+    "code_challenge=$desafio"
+    "code_challenge_method=S256"
 ) -join '&'
 
 $urlConsentimento = "https://accounts.google.com/o/oauth2/v2/auth?$parametros"
@@ -88,6 +108,11 @@ Start-Process $urlConsentimento | Out-Null
 $contexto = $ouvinte.GetContext()
 $codigo = $contexto.Request.QueryString['code']
 $erro = $contexto.Request.QueryString['error']
+if ($codigo -and $contexto.Request.QueryString['state'] -ne $state) {
+    # Retorno que nao veio do consentimento aberto por esta execucao: descarta o codigo.
+    $codigo = $null
+    $erro = 'state nao confere -- retorno de outra origem, descartado'
+}
 
 $html = if ($codigo) {
     '<html><body style="font-family:sans-serif;padding:40px"><h2>Autorizado.</h2>' +
@@ -118,6 +143,7 @@ $resposta = Invoke-RestMethod -Method Post -Uri 'https://oauth2.googleapis.com/t
     client_secret = $ClientSecret
     redirect_uri  = $redirecionamento
     grant_type    = 'authorization_code'
+    code_verifier = $verificador
 }
 
 if (-not $resposta.refresh_token) {

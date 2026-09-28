@@ -101,7 +101,9 @@ nano .env
 ```
 
 Preencha também `SOLARSYNC_ADMIN_SENHA_INICIAL` — é a **única** forma de entrar num banco novo,
-porque não há auto-cadastro nem login federado. E ajuste `SOLARSYNC_DOMINIO`.
+porque não há auto-cadastro nem login federado — com **12 caracteres ou mais**, senão a API não
+sobe. E ajuste `SOLARSYNC_DOMINIO`. Sem `SOLARSYNC_JWT_SEGREDO` a API também não sobe: o perfil
+`prod` recusa sortear um segredo.
 
 ```sh
 chmod +x deploy.sh backup.sh

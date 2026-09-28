@@ -32,7 +32,7 @@ class TokenServiceTest {
     @BeforeEach
     void montar() {
         JwtProperties propriedades = new JwtProperties(
-                "solarsync", SEGREDO, Duration.ofMinutes(15), Duration.ofHours(8));
+                "solarsync", SEGREDO, Duration.ofMinutes(15), Duration.ofHours(8), false);
         JwtConfig config = new JwtConfig();
         SecretKey chave = config.chaveJwt(propriedades);
 
@@ -111,7 +111,7 @@ class TokenServiceTest {
         var tokens = tokenService.emitirPar(usuario());
 
         JwtProperties outras = new JwtProperties(
-                "solarsync", "outro-segredo-completamente-diferente!!", null, null);
+                "solarsync", "outro-segredo-completamente-diferente!!", null, null, null);
         JwtConfig config = new JwtConfig();
         SecretKey outraChave = new SecretKeySpec(
                 outras.segredo().getBytes(java.nio.charset.StandardCharsets.UTF_8),
@@ -123,7 +123,7 @@ class TokenServiceTest {
 
     @Test
     void segredoCurtoDemaisFalhaNoBootEmVezDeEnfraquecerAAssinatura() {
-        JwtProperties fraco = new JwtProperties("solarsync", "curto", null, null);
+        JwtProperties fraco = new JwtProperties("solarsync", "curto", null, null, null);
 
         assertThatThrownBy(() -> new JwtConfig().chaveJwt(fraco))
                 .isInstanceOf(IllegalStateException.class)
@@ -132,8 +132,25 @@ class TokenServiceTest {
 
     @Test
     void semSegredoConfiguradoGeraChaveAleatoriaParaNaoTravarODev() {
-        JwtProperties semSegredo = new JwtProperties("solarsync", null, null, null);
+        JwtProperties semSegredo = new JwtProperties("solarsync", null, null, null, null);
 
         assertThat(new JwtConfig().chaveJwt(semSegredo)).isNotNull();
+    }
+
+    /** Achado A-02 da auditoria: em produção, sortear o segredo é defeito silencioso. */
+    @Test
+    void semSegredoNoPerfilQueOExigeFalhaNoBoot() {
+        JwtProperties producao = new JwtProperties("solarsync", "  ", null, null, true);
+
+        assertThatThrownBy(() -> new JwtConfig().chaveJwt(producao))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("SOLARSYNC_JWT_SEGREDO");
+    }
+
+    @Test
+    void segredoConfiguradoNoPerfilQueOExigeSobeNormalmente() {
+        JwtProperties producao = new JwtProperties("solarsync", SEGREDO, null, null, true);
+
+        assertThat(new JwtConfig().chaveJwt(producao)).isNotNull();
     }
 }

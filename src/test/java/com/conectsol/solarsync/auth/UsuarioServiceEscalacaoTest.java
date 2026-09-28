@@ -17,11 +17,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.conectsol.solarsync.auth.dto.UsuarioCriarRequest;
 import com.conectsol.solarsync.common.security.UsuarioAutenticado;
+import com.conectsol.solarsync.historico.HistoricoStatusService;
 
 /**
  * A guarda que impede o GESTOR de virar ADMINISTRADOR por conta própria.
@@ -41,6 +43,12 @@ class UsuarioServiceEscalacaoTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private ApplicationEventPublisher eventos;
+
+    @Mock
+    private HistoricoStatusService historicoStatusService;
 
     @InjectMocks
     private UsuarioService servico;
@@ -118,5 +126,55 @@ class UsuarioServiceEscalacaoTest {
                 .isInstanceOf(AccessDeniedException.class);
 
         verify(usuarioRepository, never()).save(any());
+    }
+
+    /**
+     * Achado A-01 da auditoria: a conta de integração não tem papel, então a guarda de
+     * administrador a deixava passar. Vale até para o ADMINISTRADOR — não há operação legítima
+     * de tela sobre ela.
+     */
+    @Test
+    void ninguemReativaDefineSenhaEditaOuExcluiContaDeSistema() {
+        Usuario integracao = Usuario.builder()
+                .nome("Integração automática").email("integracao@conectsol.com").ativo(false)
+                .contaSistema(true)
+                .build();
+        integracao.setId(5L);
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(integracao));
+        var edicao = new com.conectsol.solarsync.auth.dto.UsuarioAtualizarRequest(
+                "Integração automática", "integracao@conectsol.com", Set.of(NomePapel.GESTOR));
+
+        for (UsuarioAutenticado autor : java.util.List.of(gestor, administrador)) {
+            assertThatThrownBy(() -> servico.alterarAtivacao(5L, true, autor))
+                    .isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> servico.definirSenha(5L, "senha-do-atacante-1", autor))
+                    .isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> servico.atualizar(5L, edicao, autor))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+        assertThatThrownBy(() -> servico.excluir(5L)).isInstanceOf(AccessDeniedException.class);
+
+        verify(usuarioRepository, never()).save(any());
+        verify(usuarioRepository, never()).delete(any());
+        verify(eventos, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    void redefinirSenhaDeixaTrilhaComOAutor() {
+        Usuario alvo = Usuario.builder()
+                .nome("Larissa").email("larissa@conectsol.com").ativo(true)
+                .build();
+        alvo.setId(4L);
+        when(usuarioRepository.findById(4L)).thenReturn(Optional.of(alvo));
+        when(usuarioRepository.save(any())).thenAnswer(invocacao -> invocacao.getArgument(0));
+        when(passwordEncoder.encode(anyString())).thenReturn("hash");
+
+        servico.definirSenha(4L, "outra-senha-123", gestor);
+
+        verify(eventos).publishEvent(org.mockito.ArgumentMatchers.<Object>argThat(evento ->
+                evento instanceof com.conectsol.solarsync.auth.event.UsuarioAlteradoEvent e
+                        && e.alvoId().equals(4L)
+                        && e.autorId().equals(gestor.id())
+                        && UsuarioService.SENHA_DEFINIDA.equals(e.statusNovo())));
     }
 }

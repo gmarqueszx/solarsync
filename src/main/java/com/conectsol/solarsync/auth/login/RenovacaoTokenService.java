@@ -33,8 +33,9 @@ public class RenovacaoTokenService {
 
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .filter(Usuario::isAtivo)
+                .filter(encontrado -> !encontrado.isContaSistema())
                 .orElseThrow(() -> {
-                    log.warn("Renovação recusada: usuário {} inexistente ou inativo", usuarioId);
+                    log.warn("Renovação recusada: usuário {} inexistente, inativo ou conta de sistema", usuarioId);
                     return new UsuarioNaoAutorizadoException();
                 });
 
