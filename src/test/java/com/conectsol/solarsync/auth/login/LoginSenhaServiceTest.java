@@ -129,4 +129,16 @@ class LoginSenhaServiceTest {
                 .isInstanceOf(CredenciaisInvalidasException.class)
                 .hasMessage("Credenciais inválidas");
     }
+
+    /** Achado A-01 da auditoria: nem com senha gravada no banco a conta de integração entra. */
+    @Test
+    void contaDeSistemaNaoEntraMesmoComSenhaCorreta() {
+        Usuario integracao = usuarioComSenha();
+        integracao.setContaSistema(true);
+        when(usuarioRepository.findByEmail("larissa@conectsol.com"))
+                .thenReturn(Optional.of(integracao));
+
+        assertThatThrownBy(() -> servico.autenticar("larissa@conectsol.com", SENHA_CORRETA))
+                .isInstanceOf(CredenciaisInvalidasException.class);
+    }
 }

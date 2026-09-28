@@ -16,6 +16,10 @@
 
 set -euo pipefail
 
+# O dump é o banco inteiro — clientes, débitos, hashes de senha. Sem isto ele nasceria legível
+# por qualquer usuário do servidor (umask padrão 022).
+umask 077
+
 cd "$(dirname "$0")"
 
 # O compose lê o .env sozinho para interpolar o compose.yaml, mas as variáveis não chegam a este

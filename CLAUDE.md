@@ -343,6 +343,23 @@ Duas fronteiras que a abertura obrigou a criar, ambas no `UsuarioService` (não 
   apagaria registros — e a linha "Apagar: só ADMIN" desta tabela viraria decoração.
 - **Ninguém desativa a própria conta**, que só produziria um administrador trancado do lado de
   fora.
+- **Conta de sistema não é gerenciável por ninguém**, administrador incluído
+  (`usuario.conta_sistema`, V19, 28/09/2026). Achado A-01 da auditoria de segurança
+  (`docs/security-audit`): a conta de integração não tem papel, então a guarda acima a deixava
+  passar — um GESTOR a reativava, dava senha e papel e entrava por ela, e tudo o que fizesse
+  ficava no histórico como "Integração automática". Agora ativar, definir senha, editar e
+  excluir recusam com 403; login e renovação recusam mesmo com senha gravada no banco; e ela sai
+  do `GET /api/usuarios`. Continua no `/lookup?ativo=false`, que é onde a tela resolve o nome do
+  autor de uma linha do histórico.
+
+**A gestão de usuários deixa trilha** (V19): criação, ativação/desativação, senha redefinida,
+e-mail e papéis alterados publicam `UsuarioAlteradoEvent`, gravado em `historico_status` com
+`entidade_tipo = USUARIO` e o autor tirado do token. Consulta em `GET /api/usuarios/{id}/historico`
+(`@GerenciaUsuarios`). Antes não havia rastro nenhum, e um GESTOR podia redefinir a senha de
+outro e agir em nome dele sem que ninguém soubesse. As linhas `USUARIO` não entram em métrica:
+toda consulta do dashboard filtra por `entidade_tipo`. Não é máquina de estados — `status_novo`
+é o que aconteceu (`ATIVO`, `INATIVO`, `SENHA_DEFINIDA`, `EMAIL_ALTERADO`) ou a lista de papéis
+resultante.
 
 **Excluir usuário continua só do ADMINISTRADOR**: apagar quem já aparece no `historico_status`
 falha com 409 (FK) e destruiria a auditoria que sustenta o dashboard. O caminho da operação é
@@ -1042,6 +1059,9 @@ importado da planilha. `ativo = false` é a proteção: não entra pelo login, n
 aparece em `/api/usuarios/lookup?ativo=true`, então ninguém atribui trabalho a ela por engano.
 Os jobs chamam os services direto, sem passar por `@PreAuthorize`, então papel nenhum é
 necessário.
+<p>
+⚠️ `ativo = false` **não bastava**: um GESTOR a reativava pela tela (achado A-01 da auditoria).
+Desde a V19 a proteção de verdade é `conta_sistema = true` — ver seção 4.
 
 **Falha nunca encerra o agendamento.** Cada job trata a exceção de rede, e cada item (uma
 oportunidade, um e-mail) é tratado à parte — o Nectar fora do ar, um token revogado ou uma
@@ -1226,8 +1246,8 @@ histórico falha com 409. Desative em vez de apagar — é o caminho previsto.
 
 | Variável | Efeito se ausente |
 |---|---|
-| `SOLARSYNC_JWT_SEGREDO` | segredo aleatório no boot + WARN — tokens não sobrevivem a restart (ok em dev, **inaceitável em produção**) |
-| `SOLARSYNC_ADMIN_SENHA_INICIAL` | admin da V3 segue sem senha e **ninguém consegue entrar** |
+| `SOLARSYNC_JWT_SEGREDO` | em dev, segredo aleatório no boot + WARN — tokens não sobrevivem a restart. **No perfil `prod` o boot falha** (`solarsync.jwt.segredo-obrigatorio=true`, achado A-02 da auditoria) |
+| `SOLARSYNC_ADMIN_SENHA_INICIAL` | admin da V3 segue sem senha e **ninguém consegue entrar**. Com menos de 12 caracteres o boot falha — mas só quando ela vai de fato ser aplicada: num banco que já tem senha o valor é ignorado e não barra nada |
 | `SOLARSYNC_DADOS_DE_EXEMPLO` | banco fica vazio (comportamento normal) |
 | `SOLARSYNC_CORS_ORIGENS` | `http://localhost:5173` |
 | `SOLARSYNC_NECTAR_ATIVO` / `_TOKEN` | integração com o CRM desligada: o job não existe e nenhum cliente entra sozinho (seção 9) |
@@ -1521,7 +1541,16 @@ sendo lida no build; a diferença é que agora ninguém precisa dela.
 certificado vencido num domingo derruba o sistema inteiro. O Caddy emite e renova sozinho; o
 preço é uma imagem a mais que ninguém aqui conhece de cor.
 
-Quatro decisões que valem registro:
+Decisões que valem registro:
+
+- **Content-Security-Policy no Caddy** (28/09/2026, achado A-04 da auditoria). Os tokens ficam em
+  `localStorage`, e não há sink de XSS no código — a CSP é o que contém o estrago do dia em que
+  houver um. `script-src 'self'` sem `unsafe-inline`/`unsafe-eval`; o estilo e a fonte vêm só do
+  bundle e da Google Fonts; `connect-src 'self'`, que só funciona **porque** tela e API são o
+  mesmo domínio. Conferido no navegador com o bundle de produção: a tela carrega sem violação, e
+  um `<script>` inline injetado é recusado. ⚠️ Toda origem externa nova (CDN, analytics, um
+  segundo domínio de API) precisa entrar no cabeçalho, senão quebra em silêncio — o erro só
+  aparece no console do navegador.
 
 - **Só o Caddy publica porta.** Postgres e API existem apenas na rede interna do compose. Expor
   5432 num IP público é como o banco de um sistema interno costuma vazar.

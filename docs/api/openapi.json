@@ -306,7 +306,7 @@
     },
     "/api/clientes/{id}/historico" : {
       "get" : {
-        "operationId" : "historico_4",
+        "operationId" : "historico_5",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -635,7 +635,7 @@
     "/api/debitos/{id}/historico" : {
       "get" : {
         "description" : "É desta linha do tempo que sai a métrica de tempo parado por débito.",
-        "operationId" : "historico_3",
+        "operationId" : "historico_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -849,7 +849,7 @@
     },
     "/api/pendencias/{id}/historico" : {
       "get" : {
-        "operationId" : "historico_2",
+        "operationId" : "historico_3",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -1245,7 +1245,7 @@
     },
     "/api/projetos/{id}/historico" : {
       "get" : {
-        "operationId" : "historico_1",
+        "operationId" : "historico_2",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -1882,7 +1882,7 @@
                 }
               }
             },
-            "description" : "GESTOR tentando alterar um ADMINISTRADOR"
+            "description" : "GESTOR tentando alterar um ADMINISTRADOR, ou alvo é conta de sistema"
           }
         },
         "summary" : "Edita nome, e-mail e papéis; a senha tem endpoint próprio",
@@ -1942,6 +1942,38 @@
           }
         },
         "summary" : "Desativa o usuário",
+        "tags" : [ "Usuários" ]
+      }
+    },
+    "/api/usuarios/{id}/historico" : {
+      "get" : {
+        "description" : "Criação, ativação/desativação, senha redefinida, e-mail e papéis alterados — com o autor e o instante de cada um. Só leitura: a trilha é escrita pelo listener de auditoria.",
+        "operationId" : "historico_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/HistoricoStatusResponse"
+                  }
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Trilha da gestão deste usuário",
         "tags" : [ "Usuários" ]
       }
     },
@@ -2576,7 +2608,7 @@
           },
           "entidadeTipo" : {
             "type" : "string",
-            "enum" : [ "CLIENTE", "PENDENCIA", "DEBITO", "PROJETO", "VISTORIA", "UNIFICACAO" ]
+            "enum" : [ "CLIENTE", "PENDENCIA", "DEBITO", "PROJETO", "VISTORIA", "UNIFICACAO", "USUARIO" ]
           },
           "id" : {
             "type" : "integer",

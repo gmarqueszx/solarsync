@@ -51,6 +51,23 @@ public class AdminBootstrap implements ApplicationRunner {
                         email));
     }
 
+    static final int TAMANHO_MINIMO = 12;
+
+    /**
+     * Mais exigente que os 8 caracteres do {@code DefinirSenhaRequest}: é a conta que apaga
+     * registros e cria administradores, exposta ao login público. Antes nenhuma regra valia aqui
+     * e "123" era aceito (achado A-02 da auditoria). Só é conferida quando vai de fato ser
+     * aplicada — num banco que já tem senha o valor configurado é ignorado, e recusar o boot por
+     * ele seria barrar por um valor sem efeito.
+     */
+    static void exigirSenhaForte(String senha) {
+        if (senha == null || senha.strip().length() < TAMANHO_MINIMO) {
+            throw new IllegalStateException(
+                    "solarsync.admin.senha-inicial precisa de ao menos %d caracteres"
+                            .formatted(TAMANHO_MINIMO));
+        }
+    }
+
     private void definirSenhaSeAusente(Usuario admin) {
         if (admin.getSenhaHash() != null) {
             // Em INFO, e não DEBUG, de propósito: pular em silêncio faz quem configurou uma
@@ -61,6 +78,7 @@ public class AdminBootstrap implements ApplicationRunner {
                     + "'docker compose down -v'.", admin.getEmail(), admin.getId());
             return;
         }
+        exigirSenhaForte(senhaInicial);
         admin.setSenhaHash(passwordEncoder.encode(senhaInicial));
         usuarioRepository.save(admin);
         log.warn("Senha inicial aplicada ao admin {}. Troque-a em POST /api/usuarios/{}/senha "

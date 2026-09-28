@@ -73,6 +73,15 @@ public class Usuario extends BaseEntity {
     @Column(name = "ativo", nullable = false)
     private boolean ativo = true;
 
+    /**
+     * Conta técnica das integrações (V13, marcada na V19): autora das mudanças automáticas no
+     * histórico, nunca uma pessoa. Não entra pelo login, não renova token e não é gerenciável
+     * pela tela — senão um GESTOR a reativaria e gravaria ações em nome da automação.
+     */
+    @Builder.Default
+    @Column(name = "conta_sistema", nullable = false)
+    private boolean contaSistema = false;
+
     @Builder.Default
     @ManyToMany
     @JoinTable(

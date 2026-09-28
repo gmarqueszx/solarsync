@@ -57,6 +57,18 @@
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "same-origin"
+		# Achado A-04 da auditoria (docs/security-audit): os tokens ficam em localStorage, então
+		# um script injetado os levaria. Não há sink de XSS no código hoje; a CSP é o que contém
+		# o estrago do dia em que houver um, ou de uma dependência comprometida.
+		#   script-src 'self'   — só o bundle do Vite; nada inline, nada de eval
+		#   style-src           — o CSS do bundle e o da Google Fonts. Os `style={{...}}` do React
+		#                         são propriedades do CSSOM, que a CSP não bloqueia
+		#   img-src data:       — a textura SVG da tela de login é um data: URI no index.css
+		#   connect-src 'self'  — a API é o mesmo domínio; qualquer outro destino é recusado
+		# Nova origem externa (um CDN, um analytics) precisa entrar aqui, senão ela quebra em
+		# silêncio no navegador — o erro só aparece no console.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
 		-Server
 	}
 

@@ -4,6 +4,11 @@ services:
     environment:
       - 'POSTGRES_DB=solarsync'
       - 'POSTGRES_USER=solarsync'
-      - 'POSTGRES_PASSWORD=solarsync_dev'
+      # Senha só de desenvolvimento, sobreponível pelo ambiente. Nunca reaproveitar em outro
+      # ambiente: o deploy tem a própria, obrigatória (deploy/compose.yaml).
+      - 'POSTGRES_PASSWORD=${SOLARSYNC_DEV_POSTGRES_SENHA:-solarsync_dev}'
     ports:
-      - '5432'
+      # Só no loopback (achado A-03 da auditoria): '5432' sozinho publicava a porta em todas as
+      # interfaces, e qualquer máquina da mesma rede entrava com a senha acima. O host fica
+      # efêmero, como antes — o suporte a Docker Compose do Spring Boot descobre a porta sozinho.
+      - '127.0.0.1::5432'

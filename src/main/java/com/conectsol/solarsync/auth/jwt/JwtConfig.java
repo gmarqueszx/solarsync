@@ -37,11 +37,19 @@ public class JwtConfig {
      * Sem {@code solarsync.jwt.segredo} configurado, gera um segredo aleatório: assim nenhum
      * segredo precisa entrar no repositório e o build/dev roda sem configuração. O preço é que
      * os tokens não sobrevivem a um restart — inaceitável em produção, onde a variável de
-     * ambiente é obrigatória.
+     * ambiente é obrigatória e a falta dela derruba o boot ({@code segredo-obrigatorio=true} no
+     * {@code application-prod.properties}).
      */
     @Bean
     SecretKey chaveJwt(JwtProperties propriedades) {
         String segredo = propriedades.segredo();
+        if ((segredo == null || segredo.isBlank()) && propriedades.segredoObrigatorio()) {
+            // Achado A-02 da auditoria: em produção o sorteio não é conveniência, é defeito
+            // silencioso — todo mundo deslogado a cada restart e nada acusando a causa.
+            throw new IllegalStateException(
+                    "solarsync.jwt.segredo é obrigatório neste perfil: defina "
+                            + "SOLARSYNC_JWT_SEGREDO (gere com: openssl rand -base64 48)");
+        }
         if (segredo == null || segredo.isBlank()) {
             log.warn("solarsync.jwt.segredo ausente: gerando segredo aleatório. "
                     + "Os tokens emitidos NÃO sobrevivem a um restart. "
