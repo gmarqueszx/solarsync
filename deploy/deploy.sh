@@ -13,6 +13,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# Os workflows do backend e do frontend (.github/workflows/deploy.yml) disparam este script cada um
+# por conta própria, e um push nos dois repositórios ao mesmo tempo rodaria dois builds sobre a
+# mesma pilha. A trava faz o segundo esperar o primeiro terminar — e, como ele dá `git pull` nos
+# dois, o segundo publica o que o primeiro já trouxe mais o que chegou depois.
+exec 9>/tmp/solarsync-deploy.lock
+if ! flock -w 1200 9; then
+	echo "ERRO: outro deploy está rodando há mais de 20 minutos." >&2
+	exit 1
+fi
+
 if [[ ! -f .env ]]; then
 	echo "ERRO: deploy/.env não existe. Copie o .env.example e preencha os segredos." >&2
 	exit 1

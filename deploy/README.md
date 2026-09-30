@@ -131,14 +131,57 @@ Se aparecer preflight, alguém embutiu um `VITE_API_URL` no build.
 
 ## Deploys seguintes
 
+**Automáticos**: push na `main` de qualquer um dos dois repositórios publica sozinho. O workflow
+`.github/workflows/deploy.yml` roda a suíte (backend) ou o build (frontend) no GitHub e, se
+passar, entra no servidor por SSH e dispara o `deploy.sh`. Teste vermelho não publica. O
+andamento fica na aba **Actions** de cada repositório, e o botão *Run workflow* republica à mão.
+
+À mão, pelo Terminal do painel, continua valendo:
+
 ```sh
 cd /opt/solarsync/solarsync/deploy && ./deploy.sh
 ```
 
-O script atualiza os **dois** repositórios e reconstrói o que mudou.
+O script atualiza os **dois** repositórios e reconstrói o que mudou. Duas execuções ao mesmo
+tempo não brigam: a segunda espera a primeira terminar (`flock`).
 
-**Antes de subir, rode `./mvnw test` na sua máquina.** A suíte exige Docker e não roda dentro do
-build da imagem; o servidor não é lugar de descobrir teste vermelho.
+### Configurar o deploy automático (uma vez)
+
+**1. Uma chave só para o GitHub, restrita ao deploy.** No servidor:
+
+```sh
+ssh-keygen -t ed25519 -f ~/.ssh/github-deploy -N "" -C github-actions
+echo "command=\"cd /opt/solarsync/solarsync/deploy && ./deploy.sh\",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty $(cat ~/.ssh/github-deploy.pub)" >> ~/.ssh/authorized_keys
+cat ~/.ssh/github-deploy      # → secret DEPLOY_CHAVE_SSH (a privada, inteira)
+rm ~/.ssh/github-deploy       # depois de copiar: a privada só precisa existir no GitHub
+```
+
+E, da sua máquina, a identidade do servidor (secret `DEPLOY_KNOWN_HOSTS`):
+
+```sh
+ssh-keyscan -t ed25519 <IP-do-VPS>
+```
+
+⚠️ O `command=` é o que faz esta chave não ser um acesso root ao servidor guardado no GitHub:
+com ela, quem tiver o secret consegue **só** rodar o `deploy.sh`, ou seja, republicar a `main`.
+Não é a mesma chave das deploy keys do passo 3, que servem para o servidor ler o GitHub (o
+caminho inverso).
+
+**2. Os secrets, nos dois repositórios** (Settings → Environments → New environment
+`producao` → Add environment secret):
+
+| Secret | Valor |
+|---|---|
+| `DEPLOY_HOST` | IP do VPS |
+| `DEPLOY_USUARIO` | o usuário onde a chave foi instalada (em geral `root`) |
+| `DEPLOY_CHAVE_SSH` | a chave privada do passo 1 |
+| `DEPLOY_KNOWN_HOSTS` | a linha do `ssh-keyscan` do passo 1 |
+
+No environment `producao` dá para ligar *Required reviewers*, se quiser que cada publicação
+espere um clique de aprovação em vez de ir direto.
+
+**3. Conferir**: Actions → Deploy → *Run workflow* num dos repositórios. O log do passo
+"Disparar deploy/deploy.sh" deve terminar em `>> API no ar`.
 
 ## Backup
 

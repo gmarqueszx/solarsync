@@ -1,0 +1,64 @@
+# Publica no VPS a cada push na main — mas só depois de a suíte passar.
+#
+# A suíte não roda dentro da imagem (exige Docker, e seria Docker dentro de Docker; ver seção 14
+# do CLAUDE.md). O runner do GitHub tem Docker, então é aqui que o Testcontainers roda, e é isto
+# que transforma o "rode ./mvnw test antes de publicar" do deploy.sh de pedido em regra.
+#
+# O deploy em si continua sendo o deploy/deploy.sh no servidor: este workflow só entra por SSH e
+# o dispara. A chave é restrita no authorized_keys a esse único comando (deploy/README.md), então
+# um vazamento do secret permite no máximo republicar a main.
+#
+# O solarsync-web tem o workflow irmão, que dispara o mesmo script: o deploy.sh atualiza os dois
+# repositórios, então tanto faz qual deles mudou.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Dois pushes seguidos não podem publicar em paralelo nem se cancelar no meio de um build.
+# O deploy.sh também trava com flock, porque o workflow do frontend não enxerga este grupo.
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # O mvnw está no git sem o bit de execução.
+      - name: Suíte (Testcontainers com Postgres real)
+        run: bash ./mvnw -B test
+
+  publicar:
+    needs: testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: producao
+    steps:
+      - name: Disparar deploy/deploy.sh no servidor
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USUARIO: ${{ secrets.DEPLOY_USUARIO }}
+          DEPLOY_CHAVE_SSH: ${{ secrets.DEPLOY_CHAVE_SSH }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_CHAVE_SSH" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          # known_hosts fixo, e não StrictHostKeyChecking=no: sem ele, quem se passasse pelo
+          # servidor receberia a conexão sem aviso nenhum.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # Sem comando: quem decide o que roda é o command= do authorized_keys.
+          ssh -i ~/.ssh/deploy -o BatchMode=yes "$DEPLOY_USUARIO@$DEPLOY_HOST"
