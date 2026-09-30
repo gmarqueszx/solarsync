@@ -168,7 +168,7 @@ Não é a mesma chave das deploy keys do passo 3, que servem para o servidor ler
 caminho inverso).
 
 **2. Os secrets, nos dois repositórios** (Settings → Environments → New environment
-`producao` → Add environment secret):
+`prod` → Add environment secret):
 
 | Secret | Valor |
 |---|---|
@@ -177,7 +177,7 @@ caminho inverso).
 | `DEPLOY_CHAVE_SSH` | a chave privada do passo 1 |
 | `DEPLOY_KNOWN_HOSTS` | a linha do `ssh-keyscan` do passo 1 |
 
-No environment `producao` dá para ligar *Required reviewers*, se quiser que cada publicação
+No environment `prod` dá para ligar *Required reviewers*, se quiser que cada publicação
 espere um clique de aprovação em vez de ir direto.
 
 **3. Conferir**: Actions → Deploy → *Run workflow* num dos repositórios. O log do passo
