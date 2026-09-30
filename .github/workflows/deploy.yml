@@ -69,6 +69,12 @@ jobs:
           # tamanho das linhas, cabeçalho e rodapé) — nada disso revela a chave.
           limpar() { tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d'; }
           printf '%s\n' "$DEPLOY_CHAVE_SSH" | limpar > ~/.ssh/deploy
+          # Selecionar a chave no terminal web costuma deixar de fora as linhas BEGIN/END, e o
+          # miolo em base64 sozinho já é a chave inteira. Recolocá-las poupa gerar outra.
+          if ! grep -q -- '-----BEGIN ' ~/.ssh/deploy; then
+            { echo '-----BEGIN OPENSSH PRIVATE KEY-----'; cat ~/.ssh/deploy; echo '-----END OPENSSH PRIVATE KEY-----'; } > ~/.ssh/deploy.tmp
+            mv ~/.ssh/deploy.tmp ~/.ssh/deploy
+          fi
           chmod 600 ~/.ssh/deploy
           if ! ssh-keygen -y -f ~/.ssh/deploy > /dev/null 2>&1; then
             echo "::error::DEPLOY_CHAVE_SSH não é uma chave privada válida."
