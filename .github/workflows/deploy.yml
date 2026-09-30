@@ -63,10 +63,22 @@ jobs:
             fi
           done
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_CHAVE_SSH" > ~/.ssh/deploy
+          # Copiar a chave do terminal web do painel traz espaço no fim das linhas e \r do Windows,
+          # e o ssh responde só "error in libcrypto". Limpar aqui é o que torna o copiar-e-colar
+          # confiável; se ainda assim não for uma chave, mostrar o FORMATO dela (quantidade e
+          # tamanho das linhas, cabeçalho e rodapé) — nada disso revela a chave.
+          limpar() { tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d'; }
+          printf '%s\n' "$DEPLOY_CHAVE_SSH" | limpar > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
+          if ! ssh-keygen -y -f ~/.ssh/deploy > /dev/null 2>&1; then
+            echo "::error::DEPLOY_CHAVE_SSH não é uma chave privada válida."
+            echo "Linhas: $(wc -l < ~/.ssh/deploy); tamanho de cada: $(awk '{printf "%d ", length}' ~/.ssh/deploy)"
+            echo "Primeira: $(head -1 ~/.ssh/deploy)"
+            echo "Última:   $(tail -1 ~/.ssh/deploy)"
+            exit 1
+          fi
           # known_hosts fixo, e não StrictHostKeyChecking=no: sem ele, quem se passasse pelo
           # servidor receberia a conexão sem aviso nenhum.
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | limpar > ~/.ssh/known_hosts
           # Sem comando: quem decide o que roda é o command= do authorized_keys.
           ssh -i ~/.ssh/deploy -o BatchMode=yes "$DEPLOY_USUARIO@$DEPLOY_HOST"
