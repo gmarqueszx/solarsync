@@ -45,7 +45,7 @@ jobs:
     needs: testes
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: producao
+    environment: prod
     steps:
       - name: Disparar deploy/deploy.sh no servidor
         env:
@@ -54,6 +54,14 @@ jobs:
           DEPLOY_CHAVE_SSH: ${{ secrets.DEPLOY_CHAVE_SSH }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
+          # Secret ausente chega como string vazia, e o ssh só responde com o "usage" — que não diz
+          # nada. Foi assim na primeira execução: os secrets estavam em outro environment.
+          for v in DEPLOY_HOST DEPLOY_USUARIO DEPLOY_CHAVE_SSH DEPLOY_KNOWN_HOSTS; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Secret $v vazio. Ele precisa estar no environment 'prod' deste repositório."
+              exit 1
+            fi
+          done
           install -m 700 -d ~/.ssh
           printf '%s\n' "$DEPLOY_CHAVE_SSH" > ~/.ssh/deploy
           chmod 600 ~/.ssh/deploy
