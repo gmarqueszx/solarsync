@@ -116,8 +116,9 @@ public class ProjetoController {
     @PodeEscrever
     @Operation(
             summary = "Marca o projeto como AGUARDANDO_ENVIO",
-            description = "Projeto pronto mas com o envio bloqueado, tipicamente por débito do "
-                    + "cliente.")
+            description = "Projeto feito pelo analista e ainda não enviado à Coelba — feito "
+                    + "hoje, enviado amanhã. Não é o estado do cliente devedor: débito não "
+                    + "pausa o projeto, ele recusa o envio.")
     @ApiResponse(responseCode = "409", description = "Transição inválida a partir do status atual")
     public ProjetoResponse aguardarEnvio(@PathVariable Long id,
             @Autenticado UsuarioAutenticado usuario) {

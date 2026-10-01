@@ -1101,7 +1101,7 @@
     },
     "/api/projetos/{id}/aguardar-envio" : {
       "post" : {
-        "description" : "Projeto pronto mas com o envio bloqueado, tipicamente por débito do cliente.",
+        "description" : "Projeto feito pelo analista e ainda não enviado à Coelba — feito hoje, enviado amanhã. Não é o estado do cliente devedor: débito não pausa o projeto, ele recusa o envio.",
         "operationId" : "aguardarEnvio",
         "parameters" : [ {
           "in" : "path",
@@ -2454,6 +2454,9 @@
           "quantitativos" : {
             "$ref" : "#/components/schemas/Quantitativos"
           },
+          "situacaoPorEtapa" : {
+            "$ref" : "#/components/schemas/SituacaoPorEtapa"
+          },
           "temposMediosEmDias" : {
             "$ref" : "#/components/schemas/TemposMediosEmDias"
           }
@@ -3452,6 +3455,43 @@
           "dataResultado" : {
             "type" : "string",
             "format" : "date"
+          }
+        }
+      },
+      "SituacaoPorEtapa" : {
+        "type" : "object",
+        "properties" : {
+          "aguardandoVistoria" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "pendencias" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "projetosAFazer" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "projetosAguardandoEnvio" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "projetosEmAnalise" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "projetosEmCorrecao" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "triagem" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "vistoriasEmAnalise" : {
+            "type" : "integer",
+            "format" : "int64"
           }
         }
       },

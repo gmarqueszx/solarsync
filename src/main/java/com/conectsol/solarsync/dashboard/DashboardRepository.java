@@ -1,6 +1,7 @@
 package com.conectsol.solarsync.dashboard;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.stereotype.Repository;
 
@@ -325,6 +326,51 @@ class DashboardRepository {
                 WHERE 1 = 1
                 """ + noPeriodo("v.data_solicitacao") + doAnalista("p.analista_responsavel_id"),
                 de, ate, analistaId);
+    }
+
+    /*
+     * Situação por etapa: onde o fluxo está agora. Sem período e sem recorte por analista — ver
+     * DashboardResponse.SituacaoPorEtapa para o porquê.
+     */
+
+    long clientesNaTriagem() {
+        return agora("SELECT COUNT(*) FROM cliente "
+                + "WHERE status_triagem = 'AGUARDANDO_VERIFICACAO'");
+    }
+
+    /** Clientes, não pendências: um cliente com duas pendências abertas está numa etapa só. */
+    long clientesComPendenciaAberta() {
+        return agora("SELECT COUNT(DISTINCT cliente_id) FROM pendencia WHERE status = 'ABERTA'");
+    }
+
+    long projetosComStatus(String... status) {
+        return ((Number) entityManager
+                .createNativeQuery("SELECT COUNT(*) FROM projeto WHERE status IN (:status)")
+                .setParameter("status", List.of(status))
+                .getSingleResult()).longValue();
+    }
+
+    /**
+     * Aprovado na Coelba e sem vistoria em andamento nem aprovada. Inclui a vistoria
+     * <b>reprovada</b>: ela também espera alguém do campo corrigir e pedir de novo, e sumir com
+     * ela do funil esconderia justamente o cliente parado.
+     */
+    long projetosAguardandoVistoria() {
+        return agora("""
+                SELECT COUNT(*) FROM projeto p
+                WHERE p.status = 'APROVADO'
+                  AND NOT EXISTS (SELECT 1 FROM vistoria v
+                                  WHERE v.projeto_id = p.id
+                                    AND v.status IN ('SOLICITADA', 'APROVADA'))
+                """);
+    }
+
+    long vistoriasEmAnalise() {
+        return agora("SELECT COUNT(*) FROM vistoria WHERE status = 'SOLICITADA'");
+    }
+
+    private long agora(String sql) {
+        return ((Number) entityManager.createNativeQuery(sql).getSingleResult()).longValue();
     }
 
     private Double media(String sql, LocalDate de, LocalDate ate, Long analistaId) {
