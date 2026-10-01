@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.slf4j.Logger;
@@ -107,9 +108,15 @@ class GmailClient {
         GmailApi.ListaMensagens resposta = gmail.get()
                 .uri(construtor -> construtor
                         .path("/users/{usuario}/messages")
-                        .queryParam("q", consulta)
+                        // ⚠️ A consulta entra como VALOR de variável, nunca direto no
+                        // queryParam: o recorte por projetos usa a sintaxe de grupo do Gmail,
+                        // {2609290073 2609300515}, e o construtor de URI lia as chaves como
+                        // variável de template — "Not enough variable values to expand" em toda
+                        // execução, sem uma chamada sequer ao Gmail. Como valor, ela é codificada
+                        // inteira, chaves incluídas.
+                        .queryParam("q", "{q}")
                         .queryParam("maxResults", propriedades.maximoPorExecucao())
-                        .build(propriedades.usuario()))
+                        .build(Map.of("usuario", propriedades.usuario(), "q", consulta)))
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessTokenValido())
                 .retrieve()
                 .body(GmailApi.ListaMensagens.class);
