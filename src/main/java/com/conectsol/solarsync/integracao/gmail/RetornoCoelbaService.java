@@ -274,14 +274,19 @@ public class RetornoCoelbaService {
         // solarsync.coelba, reiniciar e ver o novo veredito sobre os mesmos e-mails — sem isso o
         // único em mensagem_id barraria a segunda gravação e a tabela guardaria só o primeiro
         // palpite, que é justamente o que se está tentando corrigir.
-        if (gmailProperties.somenteConferencia()) {
-            EmailCoelba existente = emailCoelbaRepository.findByMensagemId(mensagem.id())
-                    .orElse(null);
-            if (existente != null) {
+        //
+        // Fora dele, só o registro provisório é atualizado — o e-mail que esperava o projeto
+        // existir. Um registro definitivo fica como está: reler um APLICADO devolveria
+        // SEM_ALTERACAO, e sobrescrevê-lo apagaria da trilha que foi este e-mail que mudou o
+        // projeto.
+        EmailCoelba existente = emailCoelbaRepository.findByMensagemId(mensagem.id())
+                .orElse(null);
+        if (existente != null) {
+            if (gmailProperties.somenteConferencia() || existente.aguardaProjeto()) {
                 preencher(existente, mensagem, registro);
                 emailCoelbaRepository.save(existente);
-                return;
             }
+            return;
         }
 
         try {

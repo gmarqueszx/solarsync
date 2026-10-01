@@ -141,6 +141,63 @@ class RetornoCoelbaIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
+     * O caso do teste em homologação de 01/10/2026: a solicitação já aprovada na Coelba é lançada
+     * no SolarSync depois de o e-mail chegar. A primeira leitura não acha projeto; sem a releitura,
+     * o e-mail contava como processado e o projeto ficava em ENCAMINHADO com a aprovação na caixa.
+     */
+    @Test
+    void emailLidoAntesDeOProjetoExistirEAplicadoQuandoEleAparece() {
+        MensagemGmail mensagem = new MensagemGmail("msg-adiantada", "Solicitação 2609290073",
+                "Solicitação nº 2609290073 deferida.", Instant.now());
+
+        assertThat(retornoCoelbaService.processar(mensagem))
+                .isEqualTo(ResultadoProcessamento.SEM_CORRESPONDENCIA);
+        assertThat(emailCoelbaRepository.idsJaProcessados(List.of("msg-adiantada"))).isEmpty();
+
+        Projeto projeto = projetoEncaminhado("2609290073");
+
+        assertThat(retornoCoelbaService.processar(mensagem))
+                .isEqualTo(ResultadoProcessamento.APLICADO);
+        assertThat(projetoRepository.findById(projeto.getId()).orElseThrow().getStatus())
+                .isEqualTo(StatusProjeto.APROVADO);
+
+        // O mesmo registro, atualizado — e agora definitivo.
+        EmailCoelba registro = umRegistro();
+        assertThat(registro.getResultado()).isEqualTo(ResultadoProcessamento.APLICADO);
+        assertThat(registro.getProjetoId()).isEqualTo(projeto.getId());
+        assertThat(emailCoelbaRepository.idsJaProcessados(List.of("msg-adiantada")))
+                .containsExactly("msg-adiantada");
+    }
+
+    /** Sem número no texto não há projeto futuro que case: reler seria só custo. */
+    @Test
+    void semCorrespondenciaSemNumeroContinuaDefinitivo() {
+        retornoCoelbaService.processar(new MensagemGmail("msg-sem-numero", "Aviso",
+                "Sua solicitação foi deferida.", Instant.now()));
+
+        EmailCoelba registro = umRegistro();
+        assertThat(registro.getResultado()).isEqualTo(ResultadoProcessamento.SEM_CORRESPONDENCIA);
+        assertThat(emailCoelbaRepository.idsJaProcessados(List.of("msg-sem-numero")))
+                .containsExactly("msg-sem-numero");
+    }
+
+    /**
+     * Releitura de um e-mail já aplicado não pode sobrescrever o registro: viraria
+     * SEM_ALTERACAO, e a trilha perderia que foi este e-mail que mudou o projeto.
+     */
+    @Test
+    void releituraDeEmailAplicadoNaoApagaOAplicadoDaTrilha() {
+        projetoEncaminhado("4410077");
+        MensagemGmail mensagem = new MensagemGmail("msg-aplicada", "Solicitação 4410077",
+                "Solicitação nº 4410077 deferida.", Instant.now());
+
+        retornoCoelbaService.processar(mensagem);
+        retornoCoelbaService.processar(mensagem);
+
+        assertThat(umRegistro().getResultado()).isEqualTo(ResultadoProcessamento.APLICADO);
+    }
+
+    /**
      * O caso que justifica {@code RetornoCoelbaService} não ser transacional. A máquina de
      * estados barra aprovar um projeto que nunca foi encaminhado — e, se a aplicação e o registro
      * estivessem na mesma transação, a exceção a marcaria como "somente rollback" e o registro do

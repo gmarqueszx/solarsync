@@ -79,4 +79,16 @@ public class EmailCoelba extends BaseEntity {
     /** O que aconteceu, em texto, para quem for diagnosticar não precisar do log do servidor. */
     @Column(name = "detalhe", length = 1000)
     private String detalhe;
+
+    /**
+     * Retorno entendido, com número, mas sem projeto (ou sem vistoria) aqui para receber. É o
+     * único resultado de verdade provisório: o projeto pode ser cadastrado ou encaminhado
+     * depois de o e-mail chegar — o caso normal de quem lança no SolarSync uma solicitação que
+     * a Coelba já aprovou —, e então a mesma mensagem precisa voltar a ser lida.
+     * <p>
+     * Sem número não há o que esperar: nenhum projeto futuro casaria com aquele texto.
+     */
+    public boolean aguardaProjeto() {
+        return resultado == ResultadoProcessamento.SEM_CORRESPONDENCIA && numeroSolicitacao != null;
+    }
 }
