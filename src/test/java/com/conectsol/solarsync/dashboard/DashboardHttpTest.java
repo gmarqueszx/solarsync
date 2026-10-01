@@ -205,6 +205,81 @@ class DashboardHttpTest extends AbstractIntegrationTest {
         return JsonPath.read(corpo, "$.id");
     }
 
+    /**
+     * O cenário do {@code @BeforeEach} já deixa A com vistoria aprovada (fora do funil), B
+     * reprovado e C sem projeto. Aqui entram um cliente em cada etapa que faltava.
+     */
+    @Test
+    void contaQuantosEstaoEmCadaEtapaAgora() throws Exception {
+        // D: duas pendências abertas — sai da triagem e conta UMA vez na etapa de pendências.
+        Integer clienteD = criarCliente("Cliente D", 5);
+        for (String tipo : new String[] {"TROCA_TITULARIDADE", "LIGACAO_NOVA"}) {
+            postAutenticado("/api/pendencias", """
+                    {"clienteId": %d, "tipo": "%s"}""".formatted(clienteD, tipo))
+                    .andExpect(status().isCreated());
+        }
+
+        // E: projeto feito e esperando o envio.
+        Integer projetoE = criarProjeto(criarCliente("Cliente E", 5), iso(3));
+        acao("/api/projetos/%d/aguardar-envio".formatted(projetoE), "");
+
+        // F: aprovado na Coelba, sem vistoria.
+        Integer clienteF = criarCliente("Cliente F", 30);
+        Integer projetoF = criarProjeto(clienteF, iso(20));
+        consultarDebito(clienteF, "HOMOLOGACAO", "QUITADO");
+        acao("/api/projetos/%d/encaminhar".formatted(projetoF), """
+                {"dataEncaminhado": "%s", "numeroSolicitacao": "2026-COE-F0006"}"""
+                .formatted(iso(15)));
+        acao("/api/projetos/%d/aprovar".formatted(projetoF), """
+                {"dataAprovacao": "%s"}""".formatted(iso(5)));
+
+        // G: encaminhado, e com a vistoria do projeto aprovado H em análise.
+        Integer clienteG = criarCliente("Cliente G", 30);
+        Integer projetoG = criarProjeto(clienteG, iso(20));
+        consultarDebito(clienteG, "HOMOLOGACAO", "QUITADO");
+        acao("/api/projetos/%d/encaminhar".formatted(projetoG), """
+                {"dataEncaminhado": "%s", "numeroSolicitacao": "2026-COE-G0007"}"""
+                .formatted(iso(15)));
+
+        Integer clienteH = criarCliente("Cliente H", 40);
+        Integer projetoH = criarProjeto(clienteH, iso(30));
+        consultarDebito(clienteH, "HOMOLOGACAO", "QUITADO");
+        acao("/api/projetos/%d/encaminhar".formatted(projetoH), """
+                {"dataEncaminhado": "%s", "numeroSolicitacao": "2026-COE-H0008"}"""
+                .formatted(iso(25)));
+        acao("/api/projetos/%d/aprovar".formatted(projetoH), """
+                {"dataAprovacao": "%s"}""".formatted(iso(15)));
+        acao("/api/projetos/%d/registrar-instalacao".formatted(projetoH), """
+                {"dataInstalacao": "%s"}""".formatted(iso(10)));
+        postAutenticado("/api/vistorias", """
+                {"projetoId": %d, "dataSolicitacao": "%s"}""".formatted(projetoH, iso(5)))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/dashboard")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenGestor))
+                .andExpect(status().isOk())
+                // Ninguém além de D teve a triagem registrada: os projetos criados à mão não
+                // mexem nela. São A, B, C, E, F, G e H.
+                .andExpect(jsonPath("$.situacaoPorEtapa.triagem").value(7))
+                .andExpect(jsonPath("$.situacaoPorEtapa.pendencias").value(1))
+                .andExpect(jsonPath("$.situacaoPorEtapa.projetosAFazer").value(0))
+                .andExpect(jsonPath("$.situacaoPorEtapa.projetosAguardandoEnvio").value(1))
+                .andExpect(jsonPath("$.situacaoPorEtapa.projetosEmAnalise").value(1))
+                .andExpect(jsonPath("$.situacaoPorEtapa.projetosEmCorrecao").value(1))
+                // F. A tem vistoria aprovada e H tem vistoria em andamento.
+                .andExpect(jsonPath("$.situacaoPorEtapa.aguardandoVistoria").value(1))
+                .andExpect(jsonPath("$.situacaoPorEtapa.vistoriasEmAnalise").value(1));
+
+        // É foto de agora: o período e o analista não mexem nela.
+        mvc.perform(get("/api/dashboard")
+                .param("de", iso(1)).param("ate", iso(1))
+                .param("analistaId", analistaId.toString())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenGestor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.situacaoPorEtapa.triagem").value(7))
+                .andExpect(jsonPath("$.situacaoPorEtapa.projetosEmAnalise").value(1));
+    }
+
     @Test
     void calculaOsTemposMediosEOsQuantitativos() throws Exception {
         mvc.perform(get("/api/dashboard")

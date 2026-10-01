@@ -202,6 +202,15 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
   - `AGUARDANDO_ENVIO`: projeto já preenchido, mas ainda não enviado à Coelba por algum motivo
     operacional. **Não é o estado do cliente com débito**: débito não pausa o projeto, ele
     bloqueia o envio (ver "Débito" abaixo)
+    - Na tela é **"Feito, aguardando envio"** (30/09/2026, pedido da equipe na primeira rodada
+      de uso): o analista faz o projeto hoje e envia amanhã. A transição existia desde a fase 1
+      (`POST /api/projetos/{id}/aguardar-envio`), mas o botão só aparecia escondido no rodapé
+      do detalhe, e a equipe leu isso como "só dá para marcar como enviado". Agora é ação da
+      linha da tabela. O instante em que ficou feito está no `historico_status`
+      (`RECEBIDO → AGUARDANDO_ENVIO`); não há coluna `data_feito`
+    - ⚠️ A partir de `REPROVADO` a tela **não** oferece a ação, embora a máquina de estados
+      aceite: de `AGUARDANDO_ENVIO` só se sai por `/encaminhar`, que grava `ENCAMINHADO` e não
+      `REENCAMINHADO`, e o reenvio sumiria da contagem de reencaminhados do dashboard
 - **Projeto.data_instalacao** — quando a usina foi instalada. **Entrada manual, feita na etapa de
   vistoria** e não por quem homologa (decisão do usuário): o projeto aprovado cai na fila da
   Vistoria, e é lá que se registra a instalação e depois se solicita a vistoria. O endpoint
@@ -441,6 +450,22 @@ nenhum uso — se a matriz divergir de novo, ela se recria em `common/security`.
   o instante da digitação faria a métrica de tempo parado medir agilidade de digitação, e a
   zeraria em qualquer importação retroativa — foi o que aconteceu com os dados de exemplo antes
   da correção.
+
+### Situação por etapa (30/09/2026)
+
+`situacaoPorEtapa` na mesma resposta: quantos estão parados em cada etapa **agora**, na ordem
+do fluxo — triagem (clientes `AGUARDANDO_VERIFICACAO`), pendências (clientes distintos com
+pendência `ABERTA`), projetos a fazer (`RECEBIDO`), feitos aguardando envio
+(`AGUARDANDO_ENVIO`), em análise (`ENCAMINHADO`/`REENCAMINHADO`), em correção (`REPROVADO`),
+aguardando vistoria (`APROVADO` sem vistoria `SOLICITADA`/`APROVADA` — a reprovada conta, porque
+também espera alguém) e vistoria em análise (`SOLICITADA`). Pedido da equipe na primeira rodada
+de uso: os quantitativos respondiam "como foi o período" e nada respondia "onde está parado".
+
+⚠️ **Ignora o período e o `analistaId`**, ao contrário do resto da resposta. Período porque é
+foto, não filme. Analista porque a triagem não tem dono — é justamente o cliente que ninguém
+pegou —, e filtrar só onde há coluna faria a fila da triagem marcar zero com uma pessoa
+escolhida, lido como "fila vazia". A tela diz isso no subtítulo da seção. Os "aprovados no
+período" que a tela mostra ao lado saem dos quantitativos de sempre, que seguem o recorte.
 
 ## 6. Arquitetura técnica
 
@@ -1235,6 +1260,17 @@ compartilhado entre instâncias (seção 11). Redis ou tabela acrescentariam inf
 sistema de uma empresa só, e o restart só devolve ao atacante a janela que ele teria em quinze
 minutos.
 
+**Quanto dura a sessão**: o access token vive 15 min, e cada renovação emite um refresh novo de
+8 h — a janela é **deslizante**, então quem usa o sistema não é deslogado; só quem passa 8 h sem
+nenhuma requisição (a noite, tipicamente) volta ao login.
+<p>
+⚠️ A reclamação "o login não dura" da primeira rodada de uso (30/09/2026) não era a duração: o
+`client.ts` do frontend tratava **qualquer** falha da renovação como sessão encerrada e apagava
+os tokens. Com o deploy automático a cada push na main, a API reinicia várias vezes por dia, e
+quem estivesse com o access vencido naquele minuto (502 do Caddy, ou sem conexão) era deslogado
+com um refresh válido na mão; o mesmo valia para um F5 durante o deploy. Agora só 400/401 da
+renovação encerram a sessão; o resto vira `SEM_CONEXAO` e os tokens ficam.
+
 **Revogação de acesso é `usuario.ativo = false`** (`POST /api/usuarios/{id}/desativar`), não
 exclusão: o access token morre em ≤15 min e a renovação passa a ser negada, preservando a
 auditoria. Não há logout no servidor (a API é stateless; o cliente descarta os tokens).
@@ -1489,6 +1525,11 @@ Levantadas e ainda sem resposta ao fim da sessão de 03–04/09/2026:
     registros de DNS em `conectsol.com`. Nada disso é código
 24. **Ligar o Cloudflare na frente da API** (item 11 do checklist) — só depois de o primeiro
     certificado ser emitido, senão o desafio do Let's Encrypt não chega ao Caddy
+25. ~~Primeira rodada de uso em homologação (30/09/2026)~~ — **feito**: campo perdendo o foco a
+    cada letra em todos os diálogos e espaço sumindo na digitação do cadastro de cliente (ambos
+    no frontend), formulário de cliente mais largo e sem rolagem, sessão que não cai mais por
+    falha transitória durante a renovação do token (seção 10), ação "projeto feito, aguardando
+    envio" na linha de Projetos (seção 3) e a seção "Situação por etapa" no dashboard (seção 5)
 
 ## 14. Deploy
 

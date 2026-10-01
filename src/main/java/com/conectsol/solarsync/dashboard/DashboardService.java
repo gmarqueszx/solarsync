@@ -10,6 +10,7 @@ import com.conectsol.solarsync.dashboard.dto.DashboardResponse;
 import com.conectsol.solarsync.dashboard.dto.DashboardResponse.Filtro;
 import com.conectsol.solarsync.dashboard.dto.DashboardResponse.Periodo;
 import com.conectsol.solarsync.dashboard.dto.DashboardResponse.Quantitativos;
+import com.conectsol.solarsync.dashboard.dto.DashboardResponse.SituacaoPorEtapa;
 import com.conectsol.solarsync.dashboard.dto.DashboardResponse.TemposMediosEmDias;
 
 import jakarta.persistence.EntityNotFoundException;
@@ -61,7 +62,20 @@ public class DashboardService {
                         dashboardRepository.unificacoesPendentes(analistaId),
                         dashboardRepository.desligamentosAguardando(analistaId),
                         dashboardRepository.desligamentosComOsAberta(analistaId),
-                        dashboardRepository.desligamentosConcluidos(de, ate, analistaId)));
+                        dashboardRepository.desligamentosConcluidos(de, ate, analistaId)),
+                situacaoPorEtapa());
+    }
+
+    private SituacaoPorEtapa situacaoPorEtapa() {
+        return new SituacaoPorEtapa(
+                dashboardRepository.clientesNaTriagem(),
+                dashboardRepository.clientesComPendenciaAberta(),
+                dashboardRepository.projetosComStatus("RECEBIDO"),
+                dashboardRepository.projetosComStatus("AGUARDANDO_ENVIO"),
+                dashboardRepository.projetosComStatus("ENCAMINHADO", "REENCAMINHADO"),
+                dashboardRepository.projetosComStatus("REPROVADO"),
+                dashboardRepository.projetosAguardandoVistoria(),
+                dashboardRepository.vistoriasEmAnalise());
     }
 
     /**

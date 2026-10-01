@@ -18,7 +18,37 @@ public record DashboardResponse(
         Periodo periodo,
         Filtro filtro,
         TemposMediosEmDias temposMediosEmDias,
-        Quantitativos quantitativos) {
+        Quantitativos quantitativos,
+        SituacaoPorEtapa situacaoPorEtapa) {
+
+    /**
+     * Quantos estão parados em cada etapa <b>agora</b> — a fila de trabalho de cada uma, na ordem
+     * do fluxo. Pedido da equipe na primeira rodada de uso (30/09/2026).
+     * <p>
+     * <b>Ignora o período e o analista</b>, os dois de propósito. Período porque é foto, não
+     * filme: "quantos estão na triagem em março" não é uma pergunta que alguém faça. Analista
+     * porque metade das etapas não tem dono — o cliente na triagem é justamente o que ninguém
+     * pegou —, e aplicar o filtro só onde há coluna faria a triagem marcar zero com a Larissa
+     * escolhida, lido como "fila vazia" quando a fila é de todos.
+     */
+    public record SituacaoPorEtapa(
+            /** Clientes que entraram e ninguém checou a pendência na Coelba ainda. */
+            long triagem,
+            /** Clientes com pendência aberta na Coelba (um por cliente, não por pendência). */
+            long pendencias,
+            /** Projetos recebidos (pendência resolvida ou sem pendência), ainda por fazer. */
+            long projetosAFazer,
+            /** Projetos feitos, esperando o envio à Coelba. */
+            long projetosAguardandoEnvio,
+            /** Encaminhados ou reencaminhados: esperando o parecer da Coelba. */
+            long projetosEmAnalise,
+            /** Reprovados pela Coelba, esperando correção e reenvio. */
+            long projetosEmCorrecao,
+            /** Aprovados sem vistoria em andamento (inclui vistoria reprovada a refazer). */
+            long aguardandoVistoria,
+            /** Vistoria solicitada, esperando o resultado. */
+            long vistoriasEmAnalise) {
+    }
 
     /** Limites aplicados; nulo em qualquer ponta significa "sem limite daquele lado". */
     public record Periodo(LocalDate de, LocalDate ate) {
