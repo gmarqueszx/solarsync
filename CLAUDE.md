@@ -1417,6 +1417,14 @@ Coisas que funcionam como projetado, mas cujo efeito colateral vale ter em vista
   `RestClient.Builder` passou por 174 testes verdes e só apareceu ao subir a aplicação com a
   integração ligada (seção 6). Depois de mexer nos clientes ou nos jobs, subir com
   `SOLARSYNC_NECTAR_ATIVO=true` é a única prova.
+  <p>
+  Aconteceu de novo em 01/10/2026, na primeira vez que o Gmail foi ligado em homologação com
+  `somente-projetos-conhecidos=true`: o recorte manda a consulta com a sintaxe de grupo do Gmail,
+  `{2609290073 2609300515}`, e o construtor de URI do `RestClient` lia as chaves como variável de
+  template — `Not enough variable values available to expand` em toda execução, sem uma chamada
+  ao Gmail. O modo de produção nunca tinha rodado. Agora a consulta entra como valor de variável,
+  e o `GmailClientTest` instancia o cliente direto, contra um `MockRestServiceServer`, que é o
+  jeito de testá-lo sem depender do `ativo`.
 - **`email_coelba` fica órfã ao excluir projeto**, pela mesma razão e com o mesmo efeito de
   `historico_status`: sem FK em `projeto_id` de propósito, porque a FK faria `DELETE` de projeto
   falhar com 409 por causa da trilha da integração.
