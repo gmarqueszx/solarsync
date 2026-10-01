@@ -95,12 +95,24 @@ services:
       SOLARSYNC_ACME_EMAIL: ${SOLARSYNC_ACME_EMAIL:?defina SOLARSYNC_ACME_EMAIL no .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Blocos de site dos outros sistemas do VPS, importados no fim do Caddyfile.
+      - /opt/caddy-sites:/etc/caddy/sites:ro
       # Guarda os certificados emitidos. Sem este volume, cada `up` pediria certificado novo ao
       # Let's Encrypt e o limite de emissão (5 por semana por domínio) seria atingido rápido.
       - caddy-dados:/data
       - caddy-config:/config
+    networks:
+      - default
+      # Rede compartilhada com os outros sistemas do VPS, para os quais este Caddy faz proxy.
+      # Só o Caddy entra nela: a API e o Postgres do SolarSync continuam isolados.
+      - edge
 
 volumes:
   postgres-dados:
   caddy-dados:
   caddy-config:
+
+networks:
+  # Criada pelo deploy.sh se ainda não existir; externa para não pertencer a nenhuma das pilhas.
+  edge:
+    external: true
