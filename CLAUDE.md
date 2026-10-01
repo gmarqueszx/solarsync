@@ -990,9 +990,10 @@ desempatou a ordem real foi a `Data limite` de cada um. Duas consequências no c
 
 **A vistoria nunca é criada pela integração** (decisão do usuário): criar exige a data de
 instalação, que é evento de campo e não existe no portal. O e-mail só avança uma vistoria que já
-existe; sem ela, fica `SEM_CORRESPONDENCIA`. O preço assumido é que, se ninguém registrou a
-instalação, aquele retorno não é aplicado — e não volta, porque o e-mail já contará como
-processado.
+existe; sem ela, fica `SEM_CORRESPONDENCIA` — e volta a ser lido a cada execução enquanto
+estiver na janela de 7 dias da consulta, então registrar a instalação e solicitar a vistoria
+nesse prazo ainda deixa o retorno ser aplicado (ver "SEM_CORRESPONDENCIA não é definitivo",
+abaixo).
 
 #### Buscar só os projetos que esperam retorno
 
@@ -1066,6 +1067,24 @@ parecendo funcionar sem nunca mudar um projeto.
    `NAO_RECONHECIDO`, `SEM_CORRESPONDENCIA`, `AMBIGUO`, `TRANSICAO_INVALIDA`, `ERRO`) porque
    cada um aponta para uma causa e uma correção diferentes. A V15 abriu o CHECK para
    `CONFERENCIA`.
+
+⚠️ **`SEM_CORRESPONDENCIA` com número não é definitivo** (01/10/2026). Achado no primeiro teste
+em homologação: a solicitação 2609290073, já aprovada na Coelba, foi lançada no SolarSync
+depois de o e-mail chegar. O job leu, não achou projeto, gravou `SEM_CORRESPONDENCIA` — e, contado
+como processado, o e-mail nunca mais foi lido; o projeto ficou em `ENCAMINHADO` com a aprovação
+na caixa. Agora esse registro fica fora de `idsJaProcessados`, como o `CONFERENCIA`: o e-mail é
+relido a cada execução enquanto estiver na janela da consulta, o mesmo registro é **atualizado**
+(não duplicado) e, quando casa, vira definitivo. Sem número no texto continua definitivo — nenhum
+projeto futuro casaria. Registro definitivo nunca é sobrescrito na releitura: um `APLICADO`
+viraria `SEM_ALTERACAO` e a trilha perderia qual e-mail mudou o projeto.
+<p>
+**`TRANSICAO_INVALIDA` continua definitivo, de propósito.** O portal manda notificação duplicada
+e fora de ordem: um cancelamento atrasado barrado com o projeto aguardando envio seria reaplicado
+assim que ele fosse encaminhado, reprovando o envio novo. Quem cai aí resolve pela tela.
+<p>
+Custo: sem `somente-projetos-conhecidos`, todo e-mail de solicitação alheia (no ensaio de
+19/09/2026, ~110 por semana) é rebuscado a cada 15 min durante 7 dias. Barato na cota do Gmail,
+e some com o recorte ligado, que é o modo de produção.
 
 Como `historico_status`, **não tem endpoint de escrita** — só o job escreve. E, como ele, o
 `projeto_id` **não tem FK**: com FK, excluir um projeto passaria a falhar com 409 por causa da

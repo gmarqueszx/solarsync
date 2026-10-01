@@ -38,7 +38,14 @@ public enum ResultadoProcessamento {
      */
     NAO_RECONHECIDO,
 
-    /** Entendeu o resultado, mas nenhum projeto tem os números encontrados no texto. */
+    /**
+     * Entendeu o resultado, mas nenhum projeto tem os números encontrados no texto (ou o projeto
+     * não tem a vistoria que o e-mail avança).
+     * <p>
+     * Com número, <b>não é definitivo</b>: o e-mail volta a ser lido a cada execução, enquanto
+     * estiver na janela da consulta, e é aplicado quando o projeto passar a existir aqui. Ver
+     * {@code EmailCoelbaRepository.idsJaProcessados}.
+     */
     SEM_CORRESPONDENCIA,
 
     /**

@@ -125,7 +125,7 @@ class RetornoCoelbaJob {
             return;
         }
 
-        log.info("Coelba por e-mail: {} mensagem(ns) nova(s) processada(s) — {}",
+        log.info("Coelba por e-mail: {} mensagem(ns) processada(s), entre novas e as que esperavam o projeto — {}",
                 novos.size(), contagem);
 
         // Chamados à parte e em WARN porque são os que pedem ação de alguém: e-mail não
