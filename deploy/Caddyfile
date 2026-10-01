@@ -86,3 +86,9 @@
 		format console
 	}
 }
+
+# Outros sistemas hospedados neste VPS (ex.: o ReturnSync em returnsync.conectsol.com). Este Caddy
+# é o único com as portas 80/443, então ele é a borda de todos: cada sistema deixa um arquivo
+# `<nome>.caddy` em /opt/caddy-sites e roda o próprio container na rede docker `edge`, sem portas
+# publicadas. Sem arquivo nenhum lá, o glob não casa e nada muda para o SolarSync.
+import /etc/caddy/sites/*.caddy

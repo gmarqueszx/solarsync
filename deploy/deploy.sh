@@ -55,6 +55,10 @@ git pull --ff-only
 echo ">> Trazendo o código (frontend)"
 git -C "$front" pull --ff-only
 
+# A rede e a pasta que o Caddy compartilha com os outros sistemas do VPS (ver compose.yaml).
+docker network inspect edge >/dev/null 2>&1 || docker network create edge
+mkdir -p /opt/caddy-sites
+
 # ⚠️ Construir e subir em passos SEPARADOS, e não com `up -d --build`. Observado em 24/09/2026:
 # com o contexto de build errado, o `up --build` imprimiu o erro e mesmo assim **saiu com código
 # 0**, deixando a pilha inteira sem subir. Num script com `set -e` isso passa batido, e o erro só
