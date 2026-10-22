@@ -94,12 +94,44 @@ class GmailClient {
             return List.of();
         }
 
+        return listarEmLotes(propriedades.consulta(), numerosDeSolicitacao);
+    }
+
+    /**
+     * Como {@link #listarIdsDosProjetos}, mas sem o recorte de data da consulta configurada: traz
+     * todos os e-mails que a caixa tem sobre aqueles números.
+     * <p>
+     * É a busca do envio registrado com atraso (22/10/2026). O retorno da Coelba pode ter
+     * chegado semanas antes de alguém marcar o projeto como encaminhado aqui, e a janela de sete
+     * dias da consulta normal já o teria deixado para trás. Barata porque é por número: uma
+     * solicitação junta, em toda a vida dela, uns poucos e-mails.
+     */
+    List<String> listarIdsSemLimiteDeData(List<String> numerosDeSolicitacao) {
+        if (numerosDeSolicitacao.isEmpty()) {
+            return List.of();
+        }
+        return listarEmLotes(semRecorteDeData(propriedades.consulta()), numerosDeSolicitacao);
+    }
+
+    /**
+     * Tira da consulta os operadores de data do Gmail, e só eles. O remetente continua: sem ele,
+     * a busca traria também as respostas da própria equipe que citam o número, que o parser não
+     * tem o que fazer com.
+     */
+    static String semRecorteDeData(String consulta) {
+        return consulta
+                .replaceAll("(?i)(?<!\\S)-?(newer_than|older_than|newer|older|after|before):\\S+", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private List<String> listarEmLotes(String consulta, List<String> numerosDeSolicitacao) {
         Set<String> ids = new LinkedHashSet<>();
         int tamanho = propriedades.numerosPorConsulta();
         for (int inicio = 0; inicio < numerosDeSolicitacao.size(); inicio += tamanho) {
             List<String> lote = numerosDeSolicitacao.subList(
                     inicio, Math.min(inicio + tamanho, numerosDeSolicitacao.size()));
-            ids.addAll(listar(propriedades.consulta() + " {" + String.join(" ", lote) + "}"));
+            ids.addAll(listar(consulta + " {" + String.join(" ", lote) + "}"));
         }
         return List.copyOf(ids);
     }

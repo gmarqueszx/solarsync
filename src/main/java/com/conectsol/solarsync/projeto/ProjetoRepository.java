@@ -1,5 +1,6 @@
 package com.conectsol.solarsync.projeto;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -7,6 +8,7 @@ import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ProjetoRepository
         extends JpaRepository<Projeto, Long>, JpaSpecificationExecutor<Projeto> {
@@ -53,4 +55,35 @@ public interface ProjetoRepository
               )
             """)
     List<String> numerosAguardandoRetornoDaCoelba();
+
+    /**
+     * Os números dos projetos que foram encaminhados à Coelba a partir de {@code desde} e ainda
+     * esperam o primeiro retorno. É com eles que a leitura do Gmail faz a busca <b>sem limite de
+     * data</b> (22/10/2026).
+     * <p>
+     * Existe por causa do envio registrado com atraso: a solicitação 2610021352 foi aprovada na
+     * Coelba em 07/10 e só marcada como encaminhada aqui em 22/10. A consulta normal olha sete
+     * dias para trás, então a aprovação já tinha saído da janela quando o projeto passou a
+     * esperá-la, e nem chegou a {@code email_coelba}.
+     * <p>
+     * <b>Só o primeiro envio</b> ({@code ENCAMINHADO}), e não o reenvio. Num reenvio com o número
+     * do ciclo anterior, a busca sem data traria também os avisos daquele ciclo, e um
+     * cancelamento duplicado que nunca foi lido reprovaria o envio novo. No primeiro envio não há
+     * ciclo anterior para confundir.
+     * <p>
+     * O instante sai de {@code historico_status} e não de {@code data_encaminhado}, que é data de
+     * negócio e pode ser retroativa: o que se quer saber é quando o projeto <b>passou</b> a
+     * esperar aqui dentro. O projeto que já saiu de {@code ENCAMINHADO} sai da lista: o retorno
+     * chegou e não há mais o que buscar.
+     */
+    @Query("""
+            select distinct p.numeroSolicitacao from Projeto p, HistoricoStatus h
+            where h.entidadeTipo = com.conectsol.solarsync.common.EntidadeTipo.PROJETO
+              and h.entidadeId = p.id
+              and h.statusNovo = 'ENCAMINHADO'
+              and h.ocorridoEm >= :desde
+              and p.status = com.conectsol.solarsync.projeto.StatusProjeto.ENCAMINHADO
+              and p.numeroSolicitacao is not null
+            """)
+    List<String> numerosEncaminhadosDesde(@Param("desde") Instant desde);
 }
