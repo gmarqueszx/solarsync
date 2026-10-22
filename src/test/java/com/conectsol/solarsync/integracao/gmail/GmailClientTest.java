@@ -63,4 +63,34 @@ class GmailClientTest {
         assertThat(ids).containsExactly("m1", "m2");
         servidor.verify();
     }
+
+    /**
+     * A busca do envio registrado com atraso (22/10/2026): a aprovação da 2610021352 chegou 15
+     * dias antes de o projeto ser marcado como encaminhado. Sai o {@code newer_than}, fica o
+     * remetente.
+     */
+    @Test
+    void buscaSemLimiteDeDataTiraORecorteDeDataEMantemORemetente() {
+        String esperada = "from:noreplyportalgd@neoenergia.com {2610021352}";
+
+        servidor.expect(requestTo(org.hamcrest.Matchers.startsWith(
+                        "https://gmail.googleapis.com/gmail/v1/users/me/messages?")))
+                .andExpect(queryParam("q",
+                        URLEncoder.encode(esperada, StandardCharsets.UTF_8).replace("+", "%20")))
+                .andRespond(withSuccess("""
+                        {"messages": [{"id": "m3"}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(cliente.listarIdsSemLimiteDeData(List.of("2610021352"))).containsExactly("m3");
+        servidor.verify();
+    }
+
+    @Test
+    void recorteDeDataSaiDaConsultaEmQualquerPosicaoESoEle() {
+        assertThat(GmailClient.semRecorteDeData(
+                "newer_than:7d from:noreplyportalgd@neoenergia.com after:2026/10/01 -older_than:1y"))
+                .isEqualTo("from:noreplyportalgd@neoenergia.com");
+        assertThat(GmailClient.semRecorteDeData("from:a@b.com subject:solicitacao"))
+                .isEqualTo("from:a@b.com subject:solicitacao");
+    }
 }

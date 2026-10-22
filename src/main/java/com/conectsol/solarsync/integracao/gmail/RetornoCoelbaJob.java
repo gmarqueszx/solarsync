@@ -1,9 +1,12 @@
 package com.conectsol.solarsync.integracao.gmail;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -38,6 +41,13 @@ class RetornoCoelbaJob {
 
     private static final Logger log = LoggerFactory.getLogger(RetornoCoelbaJob.class);
 
+    /**
+     * Por quanto tempo depois do envio o projeto ganha a busca sem limite de data. Um dia cobre
+     * com folga um Gmail fora do ar ou um deploy no meio; depois disso a consulta normal, de sete
+     * dias, já alcança tudo o que chegar.
+     */
+    static final Duration JANELA_DA_BUSCA_RETROATIVA = Duration.ofHours(24);
+
     private final GmailClient gmailClient;
     private final EmailCoelbaRepository emailCoelbaRepository;
     private final RetornoCoelbaService retornoCoelbaService;
@@ -55,6 +65,11 @@ class RetornoCoelbaJob {
     void lerRetornos() {
         List<String> ids;
         try {
+            // ⚠️ A busca retroativa vem PRIMEIRO na lista. Cada listagem do Gmail sai do mais novo
+            // para o mais antigo, e a inversão lá embaixo é o que põe tudo em ordem cronológica;
+            // com a retroativa na frente, a deduplicação descarta a cópia da consulta normal e
+            // os e-mails de cada número continuam juntos e na ordem certa depois da inversão.
+            Set<String> todos = new LinkedHashSet<>(buscaRetroativa());
             if (propriedades.somenteProjetosConhecidos()) {
                 List<String> numeros = projetoRepository.numerosAguardandoRetornoDaCoelba();
                 // Em DEBUG e não em INFO: em regime é a mesma informação a cada quinze minutos.
@@ -62,10 +77,11 @@ class RetornoCoelbaJob {
                 // lista vazia significa que nenhum projeto está esperando retorno, e aí não há
                 // e-mail a buscar, o que é diferente de a caixa estar vazia.
                 log.debug("Gmail: buscando retorno de {} projeto(s) aguardando", numeros.size());
-                ids = gmailClient.listarIdsDosProjetos(numeros);
+                todos.addAll(gmailClient.listarIdsDosProjetos(numeros));
             } else {
-                ids = gmailClient.listarIds();
+                todos.addAll(gmailClient.listarIds());
             }
+            ids = List.copyOf(todos);
         } catch (RuntimeException falha) {
             // Não relança: Gmail fora do ar, refresh token revogado ou cota estourada não podem
             // encerrar o agendamento. Na próxima execução tenta de novo.
@@ -140,6 +156,29 @@ class RetornoCoelbaJob {
                     + "email_coelba (coluna resultado e detalhe) para ver o que houve.",
                     pendentesDeAtencao);
         }
+    }
+
+    /**
+     * Os e-mails, de qualquer data, dos projetos encaminhados nas últimas
+     * {@link #JANELA_DA_BUSCA_RETROATIVA}. Cobre o envio registrado com atraso: a Coelba aprovou
+     * a solicitação 2610021352 em 07/10, o projeto só foi marcado como encaminhado em 22/10, e a
+     * consulta normal, de sete dias, nunca viu a aprovação (22/10/2026).
+     * <p>
+     * Aqui no job, e não num listener do envio, por três razões: o clique em "Encaminhar" não
+     * espera o Gmail; uma falha do Gmail naquele minuto não perde a busca, porque ela se repete a
+     * cada execução dentro da janela; e não há duas leituras concorrentes tentando gravar o mesmo
+     * e-mail em {@code email_coelba}. O número sai da lista assim que o projeto deixa
+     * {@code ENCAMINHADO}, então a repetição acaba quando o retorno é aplicado.
+     */
+    private List<String> buscaRetroativa() {
+        List<String> numeros = projetoRepository.numerosEncaminhadosDesde(
+                Instant.now().minus(JANELA_DA_BUSCA_RETROATIVA));
+        if (numeros.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Gmail: busca sem limite de data para {} projeto(s) encaminhado(s) há pouco",
+                numeros.size());
+        return gmailClient.listarIdsSemLimiteDeData(numeros);
     }
 
     /**

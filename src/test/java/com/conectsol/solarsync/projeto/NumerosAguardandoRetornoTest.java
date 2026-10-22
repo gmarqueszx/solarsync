@@ -2,6 +2,8 @@ package com.conectsol.solarsync.projeto;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -10,7 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import com.conectsol.solarsync.cliente.Cliente;
 import com.conectsol.solarsync.cliente.ClienteRepository;
+import com.conectsol.solarsync.common.EntidadeTipo;
 import com.conectsol.solarsync.common.RepositoryTest;
+import com.conectsol.solarsync.historico.HistoricoStatus;
+import com.conectsol.solarsync.historico.HistoricoStatusRepository;
 import com.conectsol.solarsync.vistoria.StatusVistoria;
 import com.conectsol.solarsync.vistoria.Vistoria;
 import com.conectsol.solarsync.vistoria.VistoriaRepository;
@@ -32,6 +37,9 @@ class NumerosAguardandoRetornoTest {
 
     @Autowired
     private ClienteRepository clienteRepository;
+
+    @Autowired
+    private HistoricoStatusRepository historicoStatusRepository;
 
     @Test
     void trazOsEncaminhadosEOsReencaminhados() {
@@ -123,6 +131,66 @@ class NumerosAguardandoRetornoTest {
 
         assertThat(projetoRepository.numerosAguardandoRetornoDaCoelba())
                 .containsExactly("1000000009");
+    }
+
+    /**
+     * A busca sem limite de data (22/10/2026): o projeto encaminhado há pouco entra, mesmo com
+     * {@code data_encaminhado} retroativa — o que conta é quando ele passou a esperar aqui.
+     */
+    @Test
+    void encaminhadoHaPoucoEntraNaBuscaSemLimiteDeData() {
+        Projeto recente = projeto("2610021352", StatusProjeto.ENCAMINHADO);
+        historico(recente, "RECEBIDO", "ENCAMINHADO", Instant.now().minus(Duration.ofHours(1)));
+
+        assertThat(projetoRepository.numerosEncaminhadosDesde(
+                Instant.now().minus(Duration.ofHours(24))))
+                .containsExactly("2610021352");
+    }
+
+    @Test
+    void encaminhadoHaMaisTempoQueAJanelaNaoEntra() {
+        Projeto antigo = projeto("1000000010", StatusProjeto.ENCAMINHADO);
+        historico(antigo, "RECEBIDO", "ENCAMINHADO", Instant.now().minus(Duration.ofDays(3)));
+
+        assertThat(projetoRepository.numerosEncaminhadosDesde(
+                Instant.now().minus(Duration.ofHours(24))))
+                .isEmpty();
+    }
+
+    /** Retorno já aplicado: o projeto saiu de ENCAMINHADO, e não há mais o que buscar. */
+    @Test
+    void quemJaSaiuDeEncaminhadoNaoEntra() {
+        Projeto aprovado = projeto("1000000011", StatusProjeto.APROVADO);
+        historico(aprovado, "RECEBIDO", "ENCAMINHADO", Instant.now().minus(Duration.ofHours(2)));
+        historico(aprovado, "ENCAMINHADO", "APROVADO", Instant.now().minus(Duration.ofHours(1)));
+
+        assertThat(projetoRepository.numerosEncaminhadosDesde(
+                Instant.now().minus(Duration.ofHours(24))))
+                .isEmpty();
+    }
+
+    /**
+     * ⚠️ O reenvio fica de fora de propósito: com o número do ciclo anterior, a busca sem data
+     * traria um cancelamento duplicado daquele ciclo, que reprovaria o envio novo.
+     */
+    @Test
+    void reenvioNaoEntraNaBuscaSemLimiteDeData() {
+        Projeto reenviado = projeto("1000000012", StatusProjeto.REENCAMINHADO);
+        historico(reenviado, "REPROVADO", "REENCAMINHADO", Instant.now().minus(Duration.ofHours(1)));
+
+        assertThat(projetoRepository.numerosEncaminhadosDesde(
+                Instant.now().minus(Duration.ofHours(24))))
+                .isEmpty();
+    }
+
+    private void historico(Projeto projeto, String anterior, String novo, Instant quando) {
+        historicoStatusRepository.save(HistoricoStatus.builder()
+                .entidadeTipo(EntidadeTipo.PROJETO)
+                .entidadeId(projeto.getId())
+                .statusAnterior(anterior)
+                .statusNovo(novo)
+                .ocorridoEm(quando)
+                .build());
     }
 
     private Projeto projeto(String numeroSolicitacao, StatusProjeto status) {

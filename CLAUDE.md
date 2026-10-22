@@ -1078,6 +1078,21 @@ relido a cada execução enquanto estiver na janela da consulta, o mesmo registr
 projeto futuro casaria. Registro definitivo nunca é sobrescrito na releitura: um `APLICADO`
 viraria `SEM_ALTERACAO` e a trilha perderia qual e-mail mudou o projeto.
 <p>
+⚠️ **A releitura só alcança sete dias, e o envio pode ser registrado bem depois** (22/10/2026).
+A solicitação 2610021352 (ADRIANO RIBEIRO DE ALMEIDA) foi aprovada na Coelba em 07/10, e o
+projeto só foi marcado como encaminhado aqui em 22/10. Até lá ele estava em `RECEBIDO`, fora do
+recorte de `somente-projetos-conhecidos`; quando entrou no recorte, a aprovação já tinha saído
+do `newer_than:7d`, e por isso nem chegou a `email_coelba`. Agora, por **24 h** depois do
+primeiro envio (`ProjetoRepository.numerosEncaminhadosDesde`, que lê o instante do
+`historico_status` e não a `data_encaminhado`, que pode ser retroativa), o job busca aquele
+número **sem limite de data** e processa o histórico inteiro do mais antigo para o mais novo.
+Fica no job, e não num listener do envio: o clique não espera o Gmail, uma falha do Gmail
+naquele minuto não perde a busca, e não há duas leituras concorrentes gravando o mesmo e-mail.
+<p>
+**Só o primeiro envio** (`ENCAMINHADO`), não o reenvio. Com o número do ciclo anterior, a busca
+sem data traria um cancelamento duplicado daquele ciclo, que nunca foi lido, e ele reprovaria o
+envio novo. O reenvio registrado com atraso continua dependendo da janela de sete dias.
+<p>
 **`TRANSICAO_INVALIDA` continua definitivo, de propósito.** O portal manda notificação duplicada
 e fora de ordem: um cancelamento atrasado barrado com o projeto aguardando envio seria reaplicado
 assim que ele fosse encaminhado, reprovando o envio novo. Quem cai aí resolve pela tela.
