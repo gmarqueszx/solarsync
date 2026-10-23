@@ -26,6 +26,7 @@ import com.conectsol.solarsync.common.web.PaginaResponse;
 import com.conectsol.solarsync.historico.HistoricoStatusService;
 import com.conectsol.solarsync.historico.dto.HistoricoStatusResponse;
 import com.conectsol.solarsync.common.web.MotivoRequest;
+import com.conectsol.solarsync.pendencia.dto.AcompanhamentoRequest;
 import com.conectsol.solarsync.pendencia.dto.ObservacaoRequest;
 import com.conectsol.solarsync.pendencia.dto.PendenciaAtualizarRequest;
 import com.conectsol.solarsync.pendencia.dto.PendenciaCriarRequest;
@@ -99,6 +100,18 @@ public class PendenciaController {
     public PendenciaResponse atualizar(@PathVariable Long id,
             @RequestBody @Valid PendenciaAtualizarRequest requisicao) {
         return PendenciaResponse.de(pendenciaService.atualizar(id, requisicao));
+    }
+
+    @PutMapping("/{id}/acompanhamento")
+    @PodeEscrever
+    @Operation(
+            summary = "Define o status de acompanhamento da pendência",
+            description = "Anotação de trabalho, fora do ciclo de vida: não muda o status, não "
+                    + "publica evento e não entra no histórico. Nulo limpa.")
+    public PendenciaResponse definirAcompanhamento(@PathVariable Long id,
+            @RequestBody AcompanhamentoRequest requisicao) {
+        return PendenciaResponse.de(
+                pendenciaService.definirAcompanhamento(id, requisicao.statusAcompanhamento()));
     }
 
     @DeleteMapping("/{id}")

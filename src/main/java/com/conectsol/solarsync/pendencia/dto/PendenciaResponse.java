@@ -5,6 +5,7 @@ import java.time.Instant;
 import com.conectsol.solarsync.auth.dto.UsuarioResumoResponse;
 import com.conectsol.solarsync.cliente.dto.ClienteResumoResponse;
 import com.conectsol.solarsync.pendencia.Pendencia;
+import com.conectsol.solarsync.pendencia.StatusAcompanhamento;
 import com.conectsol.solarsync.pendencia.StatusPendencia;
 import com.conectsol.solarsync.pendencia.TipoPendencia;
 
@@ -23,6 +24,8 @@ public record PendenciaResponse(
         Instant resolvidoEm,
         UsuarioResumoResponse responsavel,
         String observacao,
+        String numeroSolicitacao,
+        StatusAcompanhamento statusAcompanhamento,
         Instant criadoEm,
         Instant atualizadoEm) {
 
@@ -36,6 +39,8 @@ public record PendenciaResponse(
                 pendencia.getResolvidoEm(),
                 UsuarioResumoResponse.de(pendencia.getResponsavel()),
                 pendencia.getObservacao(),
+                pendencia.getNumeroSolicitacao(),
+                pendencia.getStatusAcompanhamento(),
                 pendencia.getCriadoEm(),
                 pendencia.getAtualizadoEm());
     }

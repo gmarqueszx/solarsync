@@ -45,8 +45,13 @@ final class PendenciaSpecs {
         }
         if (filtro.q() != null && !filtro.q().isBlank()) {
             String padrao = "%" + filtro.q().trim().toLowerCase() + "%";
+            filtros.add((raiz, consulta, cb) -> cb.or(
+                    cb.like(cb.lower(raiz.get("cliente").get("nome")), padrao),
+                    cb.like(cb.lower(raiz.get("numeroSolicitacao")), padrao)));
+        }
+        if (filtro.statusAcompanhamento() != null && !filtro.statusAcompanhamento().isEmpty()) {
             filtros.add((raiz, consulta, cb) ->
-                    cb.like(cb.lower(raiz.get("cliente").get("nome")), padrao));
+                    raiz.get("statusAcompanhamento").in(filtro.statusAcompanhamento()));
         }
         if (filtro.solicitadoDe() != null) {
             filtros.add((raiz, consulta, cb) ->

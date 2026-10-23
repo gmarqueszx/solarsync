@@ -3,6 +3,7 @@ package com.conectsol.solarsync.pendencia.dto;
 import java.time.Instant;
 import java.util.Set;
 
+import com.conectsol.solarsync.pendencia.StatusAcompanhamento;
 import com.conectsol.solarsync.pendencia.StatusPendencia;
 import com.conectsol.solarsync.pendencia.TipoPendencia;
 
@@ -19,6 +20,7 @@ import jakarta.validation.constraints.Size;
  * @param semConsultaDebito pendência de cliente sem nenhuma consulta de débito registrada —
  *                          também não pode ser resolvida, mas por falta de informação, e a
  *                          ação a tomar é consultar a agência virtual, não cobrar
+ * @param q nome do cliente ou número da solicitação da pendência
  */
 public record PendenciaFiltro(
         Long clienteId,
@@ -29,5 +31,6 @@ public record PendenciaFiltro(
         Instant solicitadoDe,
         Instant solicitadoAte,
         Boolean travadaPorDebito,
-        Boolean semConsultaDebito) {
+        Boolean semConsultaDebito,
+        Set<StatusAcompanhamento> statusAcompanhamento) {
 }

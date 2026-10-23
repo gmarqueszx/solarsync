@@ -809,6 +809,45 @@
         "tags" : [ "Pendências" ]
       }
     },
+    "/api/pendencias/{id}/acompanhamento" : {
+      "put" : {
+        "description" : "Anotação de trabalho, fora do ciclo de vida: não muda o status, não publica evento e não entra no histórico. Nulo limpa.",
+        "operationId" : "definirAcompanhamento",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AcompanhamentoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PendenciaResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "summary" : "Define o status de acompanhamento da pendência",
+        "tags" : [ "Pendências" ]
+      }
+    },
     "/api/pendencias/{id}/cancelar" : {
       "post" : {
         "operationId" : "cancelar",
@@ -2271,6 +2310,15 @@
   },
   "components" : {
     "schemas" : {
+      "AcompanhamentoRequest" : {
+        "type" : "object",
+        "properties" : {
+          "statusAcompanhamento" : {
+            "type" : "string",
+            "enum" : [ "PENDENTE", "DEBITO", "ACOMPANHAR", "PERIODO_DE_LEITURA", "AGUARDO_ACOMPANHAMENTO", "STAND_BY", "PROJETO_CANCELADO", "B_OPTANTE", "SOLICITACAO_CANCELAMENTO", "RESOLVER_NA_COELBA", "FOI_SEM_BENEFICIARIO", "NOTA_RETIDA", "OBRA", "PAGO_AG_DEBITAR" ]
+          }
+        }
+      },
       "ClienteFiltro" : {
         "type" : "object",
         "properties" : {
@@ -2873,6 +2921,11 @@
       "PendenciaAtualizarRequest" : {
         "type" : "object",
         "properties" : {
+          "numeroSolicitacao" : {
+            "type" : "string",
+            "maxLength" : 50,
+            "minLength" : 0
+          },
           "observacao" : {
             "type" : "string",
             "maxLength" : 1000,
@@ -2896,6 +2949,11 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "numeroSolicitacao" : {
+            "type" : "string",
+            "maxLength" : 50,
+            "minLength" : 0
+          },
           "observacao" : {
             "type" : "string",
             "maxLength" : 1000,
@@ -2908,6 +2966,10 @@
           "solicitadoEm" : {
             "type" : "string",
             "format" : "date-time"
+          },
+          "statusAcompanhamento" : {
+            "type" : "string",
+            "enum" : [ "PENDENTE", "DEBITO", "ACOMPANHAR", "PERIODO_DE_LEITURA", "AGUARDO_ACOMPANHAMENTO", "STAND_BY", "PROJETO_CANCELADO", "B_OPTANTE", "SOLICITACAO_CANCELAMENTO", "RESOLVER_NA_COELBA", "FOI_SEM_BENEFICIARIO", "NOTA_RETIDA", "OBRA", "PAGO_AG_DEBITAR" ]
           },
           "tipo" : {
             "type" : "string",
@@ -2951,6 +3013,14 @@
             },
             "uniqueItems" : true
           },
+          "statusAcompanhamento" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "enum" : [ "PENDENTE", "DEBITO", "ACOMPANHAR", "PERIODO_DE_LEITURA", "AGUARDO_ACOMPANHAMENTO", "STAND_BY", "PROJETO_CANCELADO", "B_OPTANTE", "SOLICITACAO_CANCELAMENTO", "RESOLVER_NA_COELBA", "FOI_SEM_BENEFICIARIO", "NOTA_RETIDA", "OBRA", "PAGO_AG_DEBITAR" ]
+            },
+            "uniqueItems" : true
+          },
           "tipo" : {
             "type" : "string",
             "enum" : [ "TROCA_TITULARIDADE", "LIGACAO_NOVA", "EXTENSAO_REDE", "AUMENTO_CARGA", "MUDANCA_PADRAO", "DESMEMBRAMENTO", "REGULARIZACAO_CADASTRAL", "DEBITO_VINCULADO", "ADEQUACAO_TECNICA", "OUTRA" ]
@@ -2978,6 +3048,9 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "numeroSolicitacao" : {
+            "type" : "string"
+          },
           "observacao" : {
             "type" : "string"
           },
@@ -2995,6 +3068,10 @@
           "status" : {
             "type" : "string",
             "enum" : [ "ABERTA", "RESOLVIDA", "CANCELADA" ]
+          },
+          "statusAcompanhamento" : {
+            "type" : "string",
+            "enum" : [ "PENDENTE", "DEBITO", "ACOMPANHAR", "PERIODO_DE_LEITURA", "AGUARDO_ACOMPANHAMENTO", "STAND_BY", "PROJETO_CANCELADO", "B_OPTANTE", "SOLICITACAO_CANCELAMENTO", "RESOLVER_NA_COELBA", "FOI_SEM_BENEFICIARIO", "NOTA_RETIDA", "OBRA", "PAGO_AG_DEBITAR" ]
           },
           "tipo" : {
             "type" : "string",
@@ -3019,6 +3096,9 @@
             "type" : "integer",
             "format" : "int64"
           },
+          "numeroSolicitacao" : {
+            "type" : "string"
+          },
           "resolvidoEm" : {
             "type" : "string",
             "format" : "date-time"
@@ -3037,6 +3117,10 @@
           "status" : {
             "type" : "string",
             "enum" : [ "ABERTA", "RESOLVIDA", "CANCELADA" ]
+          },
+          "statusAcompanhamento" : {
+            "type" : "string",
+            "enum" : [ "PENDENTE", "DEBITO", "ACOMPANHAR", "PERIODO_DE_LEITURA", "AGUARDO_ACOMPANHAMENTO", "STAND_BY", "PROJETO_CANCELADO", "B_OPTANTE", "SOLICITACAO_CANCELAMENTO", "RESOLVER_NA_COELBA", "FOI_SEM_BENEFICIARIO", "NOTA_RETIDA", "OBRA", "PAGO_AG_DEBITAR" ]
           },
           "tipo" : {
             "type" : "string",
