@@ -2,6 +2,7 @@ package com.conectsol.solarsync.pendencia.dto;
 
 import java.time.Instant;
 
+import com.conectsol.solarsync.pendencia.StatusAcompanhamento;
 import com.conectsol.solarsync.pendencia.TipoPendencia;
 
 import jakarta.validation.constraints.NotNull;
@@ -19,5 +20,7 @@ public record PendenciaCriarRequest(
         @NotNull TipoPendencia tipo,
         Instant solicitadoEm,
         Long responsavelId,
-        @Size(max = 1000) String observacao) {
+        @Size(max = 1000) String observacao,
+        @Size(max = 50) String numeroSolicitacao,
+        StatusAcompanhamento statusAcompanhamento) {
 }

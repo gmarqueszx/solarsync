@@ -67,6 +67,8 @@ public class PendenciaService {
                         : requisicao.solicitadoEm())
                 .responsavel(resolverResponsavel(requisicao.responsavelId()))
                 .observacao(requisicao.observacao())
+                .numeroSolicitacao(normalizarNumero(requisicao.numeroSolicitacao()))
+                .statusAcompanhamento(requisicao.statusAcompanhamento())
                 .build();
 
         Pendencia salva = pendenciaRepository.save(pendencia);
@@ -86,6 +88,20 @@ public class PendenciaService {
         pendencia.setTipo(requisicao.tipo());
         pendencia.setResponsavel(resolverResponsavel(requisicao.responsavelId()));
         pendencia.setObservacao(requisicao.observacao());
+        pendencia.setNumeroSolicitacao(normalizarNumero(requisicao.numeroSolicitacao()));
+        return pendenciaRepository.save(pendencia);
+    }
+
+    /**
+     * Sem evento nem histórico, ao contrário do {@link #atualizarStatus}: o acompanhamento é
+     * anotação de trabalho, não etapa do fluxo, e não entra em métrica nenhuma. Aceito em
+     * qualquer status da pendência — quem anota "projeto cancelado" numa resolvida está
+     * registrando o que viu.
+     */
+    @Transactional
+    public Pendencia definirAcompanhamento(Long id, StatusAcompanhamento acompanhamento) {
+        Pendencia pendencia = carregar(id);
+        pendencia.setStatusAcompanhamento(acompanhamento);
         return pendenciaRepository.save(pendencia);
     }
 
@@ -168,6 +184,11 @@ public class PendenciaService {
         if (debitoService.clienteTemDebitoAtivo(clienteId, TipoDebito.PENDENCIA)) {
             throw new ClienteComDebitoException(clienteId, "resolver a pendência");
         }
+    }
+
+    /** Em branco vira nulo, para a busca e a coluna não distinguirem "" de "não informado". */
+    private static String normalizarNumero(String numero) {
+        return numero == null || numero.isBlank() ? null : numero.trim();
     }
 
     private Usuario resolverResponsavel(Long responsavelId) {

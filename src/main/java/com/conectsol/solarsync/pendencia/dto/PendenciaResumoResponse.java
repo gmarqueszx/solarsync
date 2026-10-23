@@ -3,6 +3,7 @@ package com.conectsol.solarsync.pendencia.dto;
 import java.time.Instant;
 
 import com.conectsol.solarsync.pendencia.Pendencia;
+import com.conectsol.solarsync.pendencia.StatusAcompanhamento;
 import com.conectsol.solarsync.pendencia.StatusPendencia;
 import com.conectsol.solarsync.pendencia.TipoPendencia;
 
@@ -21,7 +22,9 @@ public record PendenciaResumoResponse(
         Instant solicitadoEm,
         Instant resolvidoEm,
         Long responsavelId,
-        String responsavelNome) {
+        String responsavelNome,
+        String numeroSolicitacao,
+        StatusAcompanhamento statusAcompanhamento) {
 
     public static PendenciaResumoResponse de(Pendencia pendencia) {
         return new PendenciaResumoResponse(
@@ -34,6 +37,8 @@ public record PendenciaResumoResponse(
                 pendencia.getSolicitadoEm(),
                 pendencia.getResolvidoEm(),
                 pendencia.getResponsavel() == null ? null : pendencia.getResponsavel().getId(),
-                pendencia.getResponsavel() == null ? null : pendencia.getResponsavel().getNome());
+                pendencia.getResponsavel() == null ? null : pendencia.getResponsavel().getNome(),
+                pendencia.getNumeroSolicitacao(),
+                pendencia.getStatusAcompanhamento());
     }
 }

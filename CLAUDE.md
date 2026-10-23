@@ -133,6 +133,18 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
   - A V14 converte as linhas `EM_ANDAMENTO` em `ABERTA` e aperta o CHECK. As linhas de
     `historico_status` que citam `EM_ANDAMENTO` **ficam**: `status_anterior`/`status_novo` são
     texto livre lá, sem CHECK, e contam a história de quando o play existia
+  - **numero_solicitacao** (V20, 22/10/2026): o número que alguns tipos de pendência geram na
+    Coelba. **Opcional**, ao contrário do do projeto — outros tipos não geram número nenhum.
+    Entra na criação e no `PUT` (que o substitui; em branco vira nulo), e o `q` da listagem
+    busca por ele além do nome. Sem UNIQUE, como o do projeto
+  - **status_acompanhamento** (V20): a anotação de trabalho que a planilha tinha como texto
+    livre (`PENDENTE`, `DEBITO`, `STAND_BY`, `NOTA_RETIDA`… — 14 valores, `StatusAcompanhamento`).
+    ⚠️ **Não é o ciclo de vida**, e por isso não segue a regra arquitetural de status: não tem
+    `podeIrPara`, não publica evento, não grava `historico_status` e não entra em métrica. Muda
+    por `PUT /api/pendencias/{id}/acompanhamento` (nulo limpa), em qualquer status da pendência,
+    e **não** pelo `PUT` do recurso — senão corrigir o tipo apagaria a anotação de quem não a
+    reenviasse. Filtro `?statusAcompanhamento=A,B`. Se um dia algum desses valores precisar
+    travar ou disparar alguma coisa, ele deixou de ser anotação e vira status de verdade
 - **Debito** — cliente_id, **tipo**, status (ativo/quitado), última_consulta_em, detectado_em,
   quitado_em, consultado_por_id. É o retrato da última consulta na agência virtual, não um
   lançamento contábil: reconsultar atualiza o mesmo registro, e o vai-e-vem fica em

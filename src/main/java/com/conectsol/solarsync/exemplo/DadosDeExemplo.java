@@ -29,6 +29,7 @@ import com.conectsol.solarsync.debito.StatusDebito;
 import com.conectsol.solarsync.debito.TipoDebito;
 import com.conectsol.solarsync.debito.dto.DebitoRegistrarRequest;
 import com.conectsol.solarsync.pendencia.PendenciaService;
+import com.conectsol.solarsync.pendencia.StatusAcompanhamento;
 import com.conectsol.solarsync.pendencia.StatusPendencia;
 import com.conectsol.solarsync.pendencia.TipoPendencia;
 import com.conectsol.solarsync.pendencia.dto.PendenciaCriarRequest;
@@ -116,7 +117,7 @@ public class DadosDeExemplo implements ApplicationRunner {
         // 2. Pendência aberta, aguardando a Coelba.
         Long semAcao = criarCliente("Carlos Eduardo Lima (exemplo)", "Lauro de Freitas", 12);
         pendenciaService.criar(new PendenciaCriarRequest(semAcao, TipoPendencia.LIGACAO_NOVA,
-                instanteMenos(10), ivan, "Aguardando vistoria de ligação nova"), admin);
+                instanteMenos(10), ivan, "Aguardando vistoria de ligação nova", null, null), admin);
 
         // 3. Pendência aberta há mais tempo, já com protocolo na Coelba. Não existe status
         //    "em andamento": apontar a pendência já é iniciá-la, e o que conta o tempo é
@@ -124,12 +125,14 @@ public class DadosDeExemplo implements ApplicationRunner {
         Long comProtocolo = criarCliente("Fernanda Souza (exemplo)", "Camaçari", 20);
         pendenciaService.criar(new PendenciaCriarRequest(comProtocolo,
                 TipoPendencia.TROCA_TITULARIDADE, instanteMenos(18), larissa,
-                "Documentação enviada à Coelba; protocolo aberto"), admin);
+                "Documentação enviada à Coelba; protocolo aberto", "7012345678",
+                StatusAcompanhamento.ACOMPANHAR), admin);
 
         // 4. Pendência cancelada — cliente desistiu.
         Long cancelado = criarCliente("Roberto Alves (exemplo)", "Salvador", 30);
         var pendenciaCancelada = pendenciaService.criar(new PendenciaCriarRequest(cancelado,
-                TipoPendencia.EXTENSAO_REDE, instanteMenos(28), camila, null), admin);
+                TipoPendencia.EXTENSAO_REDE, instanteMenos(28), camila, null, null,
+                StatusAcompanhamento.PROJETO_CANCELADO), admin);
         pendenciaService.atualizarStatus(pendenciaCancelada.getId(), StatusPendencia.CANCELADA,
                 camila, "Cliente desistiu da instalação");
 
@@ -138,14 +141,15 @@ public class DadosDeExemplo implements ApplicationRunner {
         Long travadoPorDebito = criarCliente("Elaine Ribeiro (exemplo)", "Salvador", 22);
         pendenciaService.criar(new PendenciaCriarRequest(travadoPorDebito,
                 TipoPendencia.LIGACAO_NOVA, instanteMenos(20), camila,
-                "Resolução travada: cliente com débito na agência virtual"), admin);
+                "Resolução travada: cliente com débito na agência virtual", null,
+                StatusAcompanhamento.DEBITO), admin);
         consultar(travadoPorDebito, TipoDebito.PENDENCIA, StatusDebito.ATIVO, 19, camila);
 
         // 6. Pendência resolvida: exigiu a consulta de débito de pendência antes, e a automação
         //    criou o projeto em RECEBIDO.
         Long resolvido = criarCliente("Juliana Martins (exemplo)", "Feira de Santana", 25);
         var pendenciaResolvida = pendenciaService.criar(new PendenciaCriarRequest(resolvido,
-                TipoPendencia.TROCA_TITULARIDADE, instanteMenos(24), ivan, null), admin);
+                TipoPendencia.TROCA_TITULARIDADE, instanteMenos(24), ivan, null, null, null), admin);
         consultar(resolvido, TipoDebito.PENDENCIA, StatusDebito.QUITADO, 23, ivan);
         pendenciaService.atualizarStatus(pendenciaResolvida.getId(), StatusPendencia.RESOLVIDA,
                 ivan, "Titularidade transferida");
@@ -281,7 +285,7 @@ public class DadosDeExemplo implements ApplicationRunner {
         consultar(prioritarioInstalado, TipoDebito.PENDENCIA, StatusDebito.QUITADO, 24, camila);
         var pendenciaPrioritaria = pendenciaService.criar(new PendenciaCriarRequest(
                 prioritarioInstalado, TipoPendencia.MUDANCA_PADRAO, instanteMenos(24), camila,
-                "Padrão trocado; aguardando a Coelba"), admin);
+                "Padrão trocado; aguardando a Coelba", null, null), admin);
         pendenciaService.atualizarStatus(pendenciaPrioritaria.getId(), StatusPendencia.RESOLVIDA,
                 admin);
 
@@ -299,14 +303,14 @@ public class DadosDeExemplo implements ApplicationRunner {
         consultar(avulso, TipoDebito.PENDENCIA, StatusDebito.QUITADO, 7, camila);
         var pendenciaAvulsa = pendenciaService.criar(new PendenciaCriarRequest(avulso,
                 TipoPendencia.REGULARIZACAO_CADASTRAL, instanteMenos(7), camila,
-                "Gestor pediu só a regularização cadastral"), admin);
+                "Gestor pediu só a regularização cadastral", null, null), admin);
         pendenciaService.atualizarStatus(pendenciaAvulsa.getId(), StatusPendencia.RESOLVIDA, admin);
 
         // 19. Cliente avulso ainda com a pendência aberta, para a fila mostrar os dois estados.
         Long avulsoAberto = criarCliente("Oficina Bom Motor (exemplo)", "Camaçari", 4, true, false);
         pendenciaService.criar(new PendenciaCriarRequest(avulsoAberto,
                 TipoPendencia.DEBITO_VINCULADO, instanteMenos(3), camila,
-                "Débito de terceiro vinculado à UC"), admin);
+                "Débito de terceiro vinculado à UC", null, StatusAcompanhamento.STAND_BY), admin);
 
         // 20. Projeto Banco, com débito quitado mas próxima conta vencendo amanhã: encaminhar
         //     responde 409 PROXIMO_DEBITO_A_VENCER. É o caso que a equipe levantou — quitado

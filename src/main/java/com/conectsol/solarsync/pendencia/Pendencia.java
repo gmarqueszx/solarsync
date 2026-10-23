@@ -57,4 +57,13 @@ public class Pendencia extends BaseEntity {
 
     @Column(name = "observacao", length = 1000)
     private String observacao;
+
+    /** Gerado pela Coelba em alguns tipos de pendência; opcional. */
+    @Column(name = "numero_solicitacao", length = 50)
+    private String numeroSolicitacao;
+
+    /** Anotação de acompanhamento, fora do ciclo de vida; ver {@link StatusAcompanhamento}. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_acompanhamento", length = 40)
+    private StatusAcompanhamento statusAcompanhamento;
 }
