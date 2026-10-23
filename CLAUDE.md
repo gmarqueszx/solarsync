@@ -1093,6 +1093,16 @@ naquele minuto não perde a busca, e não há duas leituras concorrentes gravand
 sem data traria um cancelamento duplicado daquele ciclo, que nunca foi lido, e ele reprovaria o
 envio novo. O reenvio registrado com atraso continua dependendo da janela de sete dias.
 <p>
+⚠️ **A mesma busca vale para a vistoria lançada** (22/10/2026, mesmo cliente). A busca do envio
+aplicou a aprovação, mas a vistoria dele já tinha sido aprovada no portal no começo de outubro: os
+avisos caíram em `SEM_CORRESPONDENCIA` (sem vistoria lançada, que a integração não cria) e saíram
+da janela antes de alguém poder lançá-la, o que só foi possível com o projeto aprovado. Agora, por
+24 h depois do **lançamento** da vistoria (`numerosComVistoriaLancadaDesde`, `status_anterior`
+nulo no histórico), o número também é buscado sem limite de data. Esses e-mails são lidos **só
+para a vistoria** (`RetornoCoelbaService.processar(mensagem, true)`): a busca traz o histórico
+inteiro da solicitação, e `APROVADO → REPROVADO` é transição válida, então um cancelamento antigo
+reaplicado reprovaria o projeto já aprovado. O que a consulta normal também trouxe é lido inteiro.
+<p>
 **`TRANSICAO_INVALIDA` continua definitivo, de propósito.** O portal manda notificação duplicada
 e fora de ordem: um cancelamento atrasado barrado com o projeto aguardando envio seria reaplicado
 assim que ele fosse encaminhado, reprovando o envio novo. Quem cai aí resolve pela tela.

@@ -61,9 +61,21 @@ public class RetornoCoelbaService {
      * integração não entendeu é o caso que não pode desaparecer em silêncio.
      */
     public ResultadoProcessamento processar(MensagemGmail mensagem) {
+        return processar(mensagem, false);
+    }
+
+    /**
+     * Com {@code somenteVistoria}, o e-mail só pode mexer na vistoria: um resultado de
+     * homologação (aprovação ou cancelamento) é registrado sem ser aplicado. É o modo dos e-mails
+     * antigos que a leitura volta a buscar quando uma vistoria é lançada — o histórico inteiro
+     * da solicitação, inclusive o de antes da aprovação. Reaplicá-lo seria perigoso porque
+     * {@code APROVADO → REPROVADO} é transição válida: um cancelamento de semanas atrás
+     * reprovaria o projeto já aprovado.
+     */
+    public ResultadoProcessamento processar(MensagemGmail mensagem, boolean somenteVistoria) {
         Registro registro;
         try {
-            registro = aplicar(mensagem);
+            registro = aplicar(mensagem, somenteVistoria);
         } catch (RuntimeException falha) {
             log.error("Falha ao processar o e-mail {} da Coelba", mensagem.id(), falha);
             registro = new Registro(ResultadoProcessamento.ERRO, null, null,
@@ -79,7 +91,7 @@ public class RetornoCoelbaService {
             String detalhe) {
     }
 
-    private Registro aplicar(MensagemGmail mensagem) {
+    private Registro aplicar(MensagemGmail mensagem, boolean somenteVistoria) {
         RetornoCoelba retorno = parser.ler(mensagem.texto());
 
         if (retorno.ambiguo()) {
@@ -125,10 +137,11 @@ public class RetornoCoelbaService {
         }
 
         Projeto alvo = alvos.get(0);
-        return aplicarNoProjeto(alvo, retorno, mensagem.recebidoEm());
+        return aplicarNoProjeto(alvo, retorno, mensagem.recebidoEm(), somenteVistoria);
     }
 
-    private Registro aplicarNoProjeto(Projeto projeto, RetornoCoelba retorno, Instant recebidoEm) {
+    private Registro aplicarNoProjeto(Projeto projeto, RetornoCoelba retorno, Instant recebidoEm,
+            boolean somenteVistoria) {
         String numero = projeto.getNumeroSolicitacao();
         Long id = projeto.getId();
         // A entidade veio de uma consulta fora de transação, então está destacada e continua
@@ -144,6 +157,13 @@ public class RetornoCoelbaService {
         if (retorno.resultado() == ResultadoCoelba.VISTORIA_SOLICITADA
                 || retorno.resultado() == ResultadoCoelba.VISTORIA_APROVADA) {
             return naVistoria(projeto, retorno.resultado(), recebidoEm);
+        }
+
+        if (somenteVistoria) {
+            return new Registro(ResultadoProcessamento.SEM_ALTERACAO, id, numero,
+                    "E-mail antigo relido ao lançar a vistoria: o resultado de homologação ("
+                            + retorno.resultado() + ") não é reaplicado; projeto segue em "
+                            + statusAnterior + ".");
         }
 
         StatusProjeto destino = retorno.resultado() == ResultadoCoelba.APROVADO

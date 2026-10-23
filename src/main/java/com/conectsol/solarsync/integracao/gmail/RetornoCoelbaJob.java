@@ -64,12 +64,17 @@ class RetornoCoelbaJob {
             initialDelayString = "PT45S")
     void lerRetornos() {
         List<String> ids;
+        Set<String> somenteVistoria;
         try {
             // ⚠️ A busca retroativa vem PRIMEIRO na lista. Cada listagem do Gmail sai do mais novo
             // para o mais antigo, e a inversão lá embaixo é o que põe tudo em ordem cronológica;
             // com a retroativa na frente, a deduplicação descarta a cópia da consulta normal e
             // os e-mails de cada número continuam juntos e na ordem certa depois da inversão.
             Set<String> todos = new LinkedHashSet<>(buscaRetroativa());
+            List<String> daVistoria = buscaRetroativaDaVistoria();
+            Set<String> normais = new HashSet<>(todos);
+            todos.addAll(daVistoria);
+            List<String> daConsulta;
             if (propriedades.somenteProjetosConhecidos()) {
                 List<String> numeros = projetoRepository.numerosAguardandoRetornoDaCoelba();
                 // Em DEBUG e não em INFO: em regime é a mesma informação a cada quinze minutos.
@@ -77,11 +82,17 @@ class RetornoCoelbaJob {
                 // lista vazia significa que nenhum projeto está esperando retorno, e aí não há
                 // e-mail a buscar, o que é diferente de a caixa estar vazia.
                 log.debug("Gmail: buscando retorno de {} projeto(s) aguardando", numeros.size());
-                todos.addAll(gmailClient.listarIdsDosProjetos(numeros));
+                daConsulta = gmailClient.listarIdsDosProjetos(numeros);
             } else {
-                todos.addAll(gmailClient.listarIds());
+                daConsulta = gmailClient.listarIds();
             }
+            todos.addAll(daConsulta);
+            normais.addAll(daConsulta);
             ids = List.copyOf(todos);
+            // Só o que veio exclusivamente da busca da vistoria fica restrito a ela. O que também
+            // caiu na consulta normal ou na do envio seria lido por inteiro de qualquer jeito.
+            somenteVistoria = new HashSet<>(daVistoria);
+            somenteVistoria.removeAll(normais);
         } catch (RuntimeException falha) {
             // Não relança: Gmail fora do ar, refresh token revogado ou cota estourada não podem
             // encerrar o agendamento. Na próxima execução tenta de novo.
@@ -127,7 +138,7 @@ class RetornoCoelbaJob {
 
         Map<ResultadoProcessamento, Integer> contagem = new EnumMap<>(ResultadoProcessamento.class);
         for (String id : emOrdemCronologica) {
-            ResultadoProcessamento resultado = processar(id);
+            ResultadoProcessamento resultado = processar(id, somenteVistoria.contains(id));
             contagem.merge(resultado, 1, Integer::sum);
         }
 
@@ -182,12 +193,34 @@ class RetornoCoelbaJob {
     }
 
     /**
+     * Os e-mails, de qualquer data, dos projetos cuja vistoria foi lançada nas últimas
+     * {@link #JANELA_DA_BUSCA_RETROATIVA}. A mesma falha da busca do envio, uma etapa adiante: a
+     * vistoria da solicitação 2610021352 foi aprovada no portal no começo de outubro, mas só pôde
+     * ser lançada aqui em 22/10, depois de o projeto ser aprovado — e a integração nunca cria
+     * vistoria, então os avisos ficaram sem destino até saírem da janela de sete dias.
+     * <p>
+     * ⚠️ Esses e-mails são lidos {@linkplain RetornoCoelbaService#processar(MensagemGmail, boolean)
+     * só para a vistoria}: a busca traz o histórico inteiro da solicitação, e um cancelamento
+     * antigo reaplicado reprovaria o projeto já aprovado.
+     */
+    private List<String> buscaRetroativaDaVistoria() {
+        List<String> numeros = projetoRepository.numerosComVistoriaLancadaDesde(
+                Instant.now().minus(JANELA_DA_BUSCA_RETROATIVA));
+        if (numeros.isEmpty()) {
+            return List.of();
+        }
+        log.debug("Gmail: busca sem limite de data para {} projeto(s) com vistoria lançada há pouco",
+                numeros.size());
+        return gmailClient.listarIdsSemLimiteDeData(numeros);
+    }
+
+    /**
      * Uma mensagem por vez, com a falha contida: a leitura de um e-mail problemático não pode
      * impedir os outros da mesma execução de serem aplicados.
      */
-    private ResultadoProcessamento processar(String id) {
+    private ResultadoProcessamento processar(String id, boolean somenteVistoria) {
         try {
-            return retornoCoelbaService.processar(gmailClient.buscar(id));
+            return retornoCoelbaService.processar(gmailClient.buscar(id), somenteVistoria);
         } catch (RuntimeException falha) {
             // Falha ao buscar a mensagem no Gmail: o RetornoCoelbaService nem chegou a ser
             // chamado, então não há registro em email_coelba — e é proposital que não haja. A

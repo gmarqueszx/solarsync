@@ -86,4 +86,30 @@ public interface ProjetoRepository
               and p.numeroSolicitacao is not null
             """)
     List<String> numerosEncaminhadosDesde(@Param("desde") Instant desde);
+
+    /**
+     * Os números dos projetos cuja vistoria foi lançada a partir de {@code desde} e ainda não
+     * foi aprovada. É a segunda busca sem limite de data da leitura do Gmail (22/10/2026).
+     * <p>
+     * Mesmo caso de {@link #numerosEncaminhadosDesde}, uma etapa adiante: a vistoria da
+     * solicitação 2610021352 foi aprovada no portal no começo de outubro, e a vistoria só pôde
+     * ser lançada aqui depois de o projeto ser aprovado, em 22/10. Os avisos de vistoria já
+     * estavam fora da janela de sete dias, e a integração nunca cria vistoria — então nada os
+     * aplicava.
+     * <p>
+     * Só o <b>lançamento</b> ({@code status_anterior} nulo), não a nova solicitação depois de
+     * uma reprova: aí a vistoria já existia quando os avisos chegaram, e a consulta normal os
+     * leu na hora.
+     */
+    @Query("""
+            select distinct p.numeroSolicitacao from Vistoria v join v.projeto p, HistoricoStatus h
+            where h.entidadeTipo = com.conectsol.solarsync.common.EntidadeTipo.VISTORIA
+              and h.entidadeId = v.id
+              and h.statusAnterior is null
+              and h.statusNovo = 'SOLICITADA'
+              and h.ocorridoEm >= :desde
+              and v.status <> com.conectsol.solarsync.vistoria.StatusVistoria.APROVADA
+              and p.numeroSolicitacao is not null
+            """)
+    List<String> numerosComVistoriaLancadaDesde(@Param("desde") Instant desde);
 }
