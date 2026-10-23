@@ -1,6 +1,7 @@
 package com.conectsol.solarsync.integracao.gmail;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -46,8 +47,8 @@ class RetornoCoelbaJobBuscaRetroativaTest {
 
         when(projetos.numerosAguardandoRetornoDaCoelba()).thenReturn(List.of("2610021352"));
         when(emails.idsJaProcessados(anyList())).thenReturn(List.of());
-        when(servico.processar(any())).thenReturn(ResultadoProcessamento.SEM_ALTERACAO);
-        for (String id : List.of("aprovacao", "analise", "documentacao")) {
+        when(servico.processar(any(), anyBoolean())).thenReturn(ResultadoProcessamento.SEM_ALTERACAO);
+        for (String id : List.of("aprovacao", "analise", "documentacao", "vistoria-aprovada")) {
             when(gmail.buscar(id)).thenReturn(new MensagemGmail(id, null, "", null));
         }
     }
@@ -72,6 +73,28 @@ class RetornoCoelbaJobBuscaRetroativaTest {
         ordem.verify(gmail).buscar("analise");
         ordem.verify(gmail).buscar("aprovacao");
         verify(gmail, times(3)).buscar(any());
+    }
+
+    /**
+     * Vistoria lançada há pouco: o histórico inteiro da solicitação volta, mas o que só a busca
+     * da vistoria trouxe é lido só para a vistoria — um cancelamento antigo não pode reprovar o
+     * projeto já aprovado. O que a consulta normal também trouxe é lido por inteiro.
+     */
+    @Test
+    void vistoriaLancadaHaPoucoRelêOHistoricoSoParaAVistoria() {
+        when(projetos.numerosEncaminhadosDesde(any())).thenReturn(List.of());
+        when(projetos.numerosComVistoriaLancadaDesde(any())).thenReturn(List.of("2610021352"));
+        when(gmail.listarIdsSemLimiteDeData(List.of("2610021352")))
+                .thenReturn(List.of("vistoria-aprovada", "aprovacao"));
+        // Só o aviso de vistoria, recente, também cabe na janela de sete dias da consulta normal.
+        when(gmail.listarIdsDosProjetos(List.of("2610021352")))
+                .thenReturn(List.of("vistoria-aprovada"));
+
+        job.lerRetornos();
+
+        verify(servico).processar(new MensagemGmail("aprovacao", null, "", null), true);
+        verify(servico).processar(new MensagemGmail("vistoria-aprovada", null, "", null), false);
+        verify(servico, times(2)).processar(any(), anyBoolean());
     }
 
     @Test

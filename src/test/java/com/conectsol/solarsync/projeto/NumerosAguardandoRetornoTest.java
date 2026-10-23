@@ -183,6 +183,79 @@ class NumerosAguardandoRetornoTest {
                 .isEmpty();
     }
 
+    /**
+     * A busca sem limite de data da vistoria (22/10/2026): a vistoria da solicitação 2610021352
+     * foi aprovada no portal antes de poder ser lançada aqui.
+     */
+    @Test
+    void vistoriaLancadaHaPoucoEntraNaBuscaSemLimiteDeData() {
+        Vistoria vistoria = vistoria(projeto("2610021352", StatusProjeto.APROVADO),
+                StatusVistoria.SOLICITADA);
+        historicoDaVistoria(vistoria, null, "SOLICITADA", Instant.now().minus(Duration.ofHours(1)));
+
+        assertThat(projetoRepository.numerosComVistoriaLancadaDesde(
+                Instant.now().minus(Duration.ofHours(24))))
+                .containsExactly("2610021352");
+    }
+
+    @Test
+    void vistoriaLancadaHaMaisTempoQueAJanelaNaoEntra() {
+        Vistoria vistoria = vistoria(projeto("1000000013", StatusProjeto.APROVADO),
+                StatusVistoria.SOLICITADA);
+        historicoDaVistoria(vistoria, null, "SOLICITADA", Instant.now().minus(Duration.ofDays(3)));
+
+        assertThat(projetoRepository.numerosComVistoriaLancadaDesde(
+                Instant.now().minus(Duration.ofHours(24))))
+                .isEmpty();
+    }
+
+    /** Vistoria já aprovada: o retorno chegou, e não há mais o que buscar. */
+    @Test
+    void vistoriaJaAprovadaNaoEntraNaBuscaSemLimiteDeData() {
+        Vistoria vistoria = vistoria(projeto("1000000014", StatusProjeto.APROVADO),
+                StatusVistoria.APROVADA);
+        historicoDaVistoria(vistoria, null, "SOLICITADA", Instant.now().minus(Duration.ofHours(2)));
+
+        assertThat(projetoRepository.numerosComVistoriaLancadaDesde(
+                Instant.now().minus(Duration.ofHours(24))))
+                .isEmpty();
+    }
+
+    /**
+     * Nova solicitação depois de uma reprova não entra: a vistoria já existia quando os avisos
+     * chegaram, e a consulta normal os leu na hora.
+     */
+    @Test
+    void resolicitacaoNaoEntraNaBuscaSemLimiteDeData() {
+        Vistoria vistoria = vistoria(projeto("1000000015", StatusProjeto.APROVADO),
+                StatusVistoria.SOLICITADA);
+        historicoDaVistoria(vistoria, "REPROVADA", "SOLICITADA",
+                Instant.now().minus(Duration.ofHours(1)));
+
+        assertThat(projetoRepository.numerosComVistoriaLancadaDesde(
+                Instant.now().minus(Duration.ofHours(24))))
+                .isEmpty();
+    }
+
+    private Vistoria vistoria(Projeto projeto, StatusVistoria status) {
+        return vistoriaRepository.save(Vistoria.builder()
+                .projeto(projeto)
+                .dataSolicitacao(LocalDate.now())
+                .status(status)
+                .build());
+    }
+
+    private void historicoDaVistoria(Vistoria vistoria, String anterior, String novo,
+            Instant quando) {
+        historicoStatusRepository.save(HistoricoStatus.builder()
+                .entidadeTipo(EntidadeTipo.VISTORIA)
+                .entidadeId(vistoria.getId())
+                .statusAnterior(anterior)
+                .statusNovo(novo)
+                .ocorridoEm(quando)
+                .build());
+    }
+
     private void historico(Projeto projeto, String anterior, String novo, Instant quando) {
         historicoStatusRepository.save(HistoricoStatus.builder()
                 .entidadeTipo(EntidadeTipo.PROJETO)

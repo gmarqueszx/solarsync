@@ -24,6 +24,9 @@ import com.conectsol.solarsync.projeto.Projeto;
 import com.conectsol.solarsync.projeto.ProjetoRepository;
 import com.conectsol.solarsync.projeto.StatusProjeto;
 import com.conectsol.solarsync.projeto.TipoProjeto;
+import com.conectsol.solarsync.vistoria.StatusVistoria;
+import com.conectsol.solarsync.vistoria.Vistoria;
+import com.conectsol.solarsync.vistoria.VistoriaRepository;
 
 /**
  * Prova ponta a ponta da automação da etapa 3 (seção 9 do CLAUDE.md): o retorno da Coelba lido
@@ -56,6 +59,9 @@ class RetornoCoelbaIntegrationTest extends AbstractIntegrationTest {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
+    @Autowired
+    private VistoriaRepository vistoriaRepository;
+
     /**
      * Histórico antes do resto (a FK de usuario_id), e nunca os usuários: a conta de integração é
      * semeada pela V13 e apagá-la contaminaria os outros testes que compartilham o contêiner.
@@ -64,6 +70,7 @@ class RetornoCoelbaIntegrationTest extends AbstractIntegrationTest {
     void limpar() {
         historicoStatusRepository.deleteAll();
         emailCoelbaRepository.deleteAll();
+        vistoriaRepository.deleteAll();
         projetoRepository.deleteAll();
         clienteRepository.deleteAll();
     }
@@ -291,6 +298,68 @@ class RetornoCoelbaIntegrationTest extends AbstractIntegrationTest {
                 .isEqualTo(StatusProjeto.ENCAMINHADO);
         assertThat(historicoStatusRepository.findByEntidadeTipoAndEntidadeId(
                 EntidadeTipo.PROJETO, projeto.getId())).isEmpty();
+    }
+
+    /**
+     * O caso real da solicitação 2610021352 (22/10/2026): a vistoria foi aprovada no portal antes
+     * de poder ser lançada aqui, e o aviso só volta a ser lido quando ela é lançada — junto com o
+     * histórico inteiro da solicitação. Nesse modo o aviso de vistoria vale.
+     */
+    @Test
+    void emailAntigoRelidoSoParaAVistoriaAprovaAVistoria() {
+        Projeto projeto = projeto("2610021352", StatusProjeto.APROVADO);
+        Vistoria vistoria = vistoriaSolicitada(projeto);
+
+        ResultadoProcessamento resultado = retornoCoelbaService.processar(new MensagemGmail(
+                "msg-ponto-de-conexao", "Portal da Geração Distribuída: Solicitação 2610021352",
+                """
+                Número da solicitação: 2610021352
+                Etapa anterior: Realizando vistoria e Conexão
+                Etapa atual: Ponto de Conexão Aprovado
+                """,
+                Instant.parse("2026-10-09T13:00:00Z")), true);
+
+        assertThat(resultado).isEqualTo(ResultadoProcessamento.APLICADO);
+        Vistoria atualizada = vistoriaRepository.findById(vistoria.getId()).orElseThrow();
+        assertThat(atualizada.getStatus()).isEqualTo(StatusVistoria.APROVADA);
+        assertThat(atualizada.getDataResultado()).isEqualTo(LocalDate.of(2026, 10, 9));
+    }
+
+    /**
+     * ⚠️ O perigo da releitura do histórico inteiro: {@code APROVADO → REPROVADO} é transição
+     * válida, então um cancelamento de um ciclo anterior, reaplicado, reprovaria o projeto já
+     * aprovado. No modo só-vistoria ele é registrado e nada muda.
+     */
+    @Test
+    void emailAntigoRelidoSoParaAVistoriaNaoReaplicaCancelamento() {
+        Projeto projeto = projeto("2610021353", StatusProjeto.APROVADO);
+        vistoriaSolicitada(projeto);
+
+        ResultadoProcessamento resultado = retornoCoelbaService.processar(new MensagemGmail(
+                "msg-cancelamento-antigo", "Portal da Geração Distribuída: Solicitação 2610021353",
+                """
+                Sua solicitação de acesso à rede de distribuição para instalação de geração                 distribuída foi cancelada.
+
+                Número da solicitação: 2610021353
+
+                Motivo do cancelamento: Documentação incompleta.
+                """,
+                Instant.parse("2026-10-01T13:00:00Z")), true);
+
+        assertThat(resultado).isEqualTo(ResultadoProcessamento.SEM_ALTERACAO);
+        assertThat(projetoRepository.findById(projeto.getId()).orElseThrow().getStatus())
+                .isEqualTo(StatusProjeto.APROVADO);
+        assertThat(historicoStatusRepository.findByEntidadeTipoAndEntidadeId(
+                EntidadeTipo.PROJETO, projeto.getId())).isEmpty();
+        assertThat(umRegistro().getResultado()).isEqualTo(ResultadoProcessamento.SEM_ALTERACAO);
+    }
+
+    private Vistoria vistoriaSolicitada(Projeto projeto) {
+        return vistoriaRepository.save(Vistoria.builder()
+                .projeto(projeto)
+                .dataSolicitacao(LocalDate.now())
+                .status(StatusVistoria.SOLICITADA)
+                .build());
     }
 
     private Projeto projetoEncaminhado(String numeroSolicitacao) {
