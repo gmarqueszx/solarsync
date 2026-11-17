@@ -210,6 +210,14 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
       projeto já enviado ficaria sem a chave do e-mail em silêncio
     - `POST /api/projetos/{id}/corrigir-status` (só ADMIN) continua passando por cima, de
       propósito: é a válvula da importação, onde os dados chegam fora de ordem
+    - ⚠️ **Número que já está em outro projeto é recusado** (16/11/2026): 409
+      `NUMERO_SOLICITACAO_DUPLICADO` no `/encaminhar`, no `/reencaminhar` e na correção pelo
+      `PUT`, em qualquer status do outro projeto (os e-mails da vistoria usam o mesmo número
+      depois da aprovação). Veio de um caso real: JOÃO BATISTA GAMA SILVA cadastrado duas vezes
+      (CRM + manual), os dois projetos encaminhados com o mesmo número, e a aprovação da Coelba
+      de 11/11 caindo em `AMBIGUO` sem aviso na tela. A coluna **continua sem UNIQUE**, e
+      `criar` e `corrigir-status` não passam pela guarda — são o caminho da importação. O
+      próprio projeto não conta como "outro": reenviar com o mesmo número segue normal
   - **potencia_kwp**: porte da usina, para o gestor somar kWp homologado por período
   - `AGUARDANDO_ENVIO`: projeto já preenchido, mas ainda não enviado à Coelba por algum motivo
     operacional. **Não é o estado do cliente com débito**: débito não pausa o projeto, ele
