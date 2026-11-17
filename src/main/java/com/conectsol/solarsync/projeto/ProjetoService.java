@@ -19,6 +19,7 @@ import com.conectsol.solarsync.common.FusoDaOperacao;
 import com.conectsol.solarsync.common.exception.ClienteComDebitoException;
 import com.conectsol.solarsync.common.exception.ClienteSomentePendenciaException;
 import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
+import com.conectsol.solarsync.common.exception.NumeroSolicitacaoDuplicadoException;
 import com.conectsol.solarsync.common.exception.NumeroSolicitacaoObrigatorioException;
 import com.conectsol.solarsync.common.exception.ProximoDebitoAVencerException;
 import com.conectsol.solarsync.common.exception.TransicaoStatusInvalidaException;
@@ -125,6 +126,8 @@ public class ProjetoService {
         // por uma edição — e um projeto já enviado ficaria sem a chave que casa o retorno por
         // e-mail com ele, silenciosamente.
         if (requisicao.numeroSolicitacao() != null && !requisicao.numeroSolicitacao().isBlank()) {
+            // A correção pelo PUT passa pela mesma guarda do envio, senão seria o contorno dela.
+            exigirNumeroSolicitacaoLivre(projeto, requisicao.numeroSolicitacao().trim());
             projeto.setNumeroSolicitacao(requisicao.numeroSolicitacao().trim());
         }
         projeto.setPotenciaKwp(requisicao.potenciaKwp());
@@ -220,7 +223,30 @@ public class ProjetoService {
         if (numeroSolicitacao == null || numeroSolicitacao.isBlank()) {
             throw new NumeroSolicitacaoObrigatorioException();
         }
+        exigirNumeroSolicitacaoLivre(projeto, numeroSolicitacao.trim());
         projeto.setNumeroSolicitacao(numeroSolicitacao.trim());
+    }
+
+    /**
+     * Recusa o número que já está em <b>outro</b> projeto, em qualquer status (16/11/2026).
+     * <p>
+     * O caso que motivou: cliente cadastrado duas vezes, os dois projetos encaminhados com o
+     * mesmo número, e a aprovação da Coelba caindo em {@code AMBIGUO} — nada aplicado, nenhum
+     * aviso na tela. Em qualquer status, e não só nos que esperam retorno, porque o número
+     * continua sendo a chave depois da aprovação: os e-mails da vistoria chegam com ele.
+     * <p>
+     * O próprio projeto fica de fora da comparação: reenviar com o mesmo número é o caso normal.
+     * A coluna segue sem UNIQUE, e {@code criar} e {@code corrigirStatus} não passam por aqui —
+     * são o caminho da importação, onde os dados chegam irregulares.
+     */
+    private void exigirNumeroSolicitacaoLivre(Projeto projeto, String numeroSolicitacao) {
+        projetoRepository.findByNumeroSolicitacaoIn(List.of(numeroSolicitacao)).stream()
+                .filter(outro -> !outro.getId().equals(projeto.getId()))
+                .findFirst()
+                .ifPresent(outro -> {
+                    throw new NumeroSolicitacaoDuplicadoException(numeroSolicitacao,
+                            outro.getId(), outro.getCliente().getNome());
+                });
     }
 
     /**

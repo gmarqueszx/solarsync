@@ -210,6 +210,14 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
       projeto já enviado ficaria sem a chave do e-mail em silêncio
     - `POST /api/projetos/{id}/corrigir-status` (só ADMIN) continua passando por cima, de
       propósito: é a válvula da importação, onde os dados chegam fora de ordem
+    - ⚠️ **Número que já está em outro projeto é recusado** (16/11/2026): 409
+      `NUMERO_SOLICITACAO_DUPLICADO` no `/encaminhar`, no `/reencaminhar` e na correção pelo
+      `PUT`, em qualquer status do outro projeto (os e-mails da vistoria usam o mesmo número
+      depois da aprovação). Veio de um caso real: JOÃO BATISTA GAMA SILVA cadastrado duas vezes
+      (CRM + manual), os dois projetos encaminhados com o mesmo número, e a aprovação da Coelba
+      de 11/11 caindo em `AMBIGUO` sem aviso na tela. A coluna **continua sem UNIQUE**, e
+      `criar` e `corrigir-status` não passam pela guarda — são o caminho da importação. O
+      próprio projeto não conta como "outro": reenviar com o mesmo número segue normal
   - **potencia_kwp**: porte da usina, para o gestor somar kWp homologado por período
   - `AGUARDANDO_ENVIO`: projeto já preenchido, mas ainda não enviado à Coelba por algum motivo
     operacional. **Não é o estado do cliente com débito**: débito não pausa o projeto, ele
@@ -260,6 +268,36 @@ Entidades centrais (nomes provisórios, ajustar durante desenvolvimento):
   status_novo, timestamp, usuario_id) — **necessária para calcular todas as métricas do
   dashboard**, já que a planilha guarda só a data de cada evento pontual, não um histórico
   genérico
+
+- **LogAtividade** (`log_atividade`, V21, 16/11/2026) — o log de atividades que a tela
+  "Log de Atividades" mostra: **toda** criação, edição e exclusão de cliente, pendência, débito,
+  projeto, vistoria, unificação e usuário, com quem fez (id + nome copiado), quando e o
+  antes/depois de cada campo (`alteracoes`, JSONB). Pedido do usuário: "qual usuário fez cada
+  alteração, hora, e etc.". Leitura em `GET /api/logs` (GESTOR e ADMIN), com filtro por
+  usuário, tipo + id do registro, ação, período e nome
+  - **Não é o `historico_status`, e não pode virar.** O histórico conta transições e sustenta o
+    dashboard; uma linha por edição de telefone mudaria contagens que saem de lá. Mudança de
+    status entra nos dois: no histórico como transição, aqui como edição do campo `status`
+  - ⚠️ **Escrito por um listener do Hibernate** (`auditoria/LogAtividadeHibernateListener`, em
+    `POST_INSERT/UPDATE/DELETE`), e não pelos services — o oposto da regra dos status, de
+    propósito. Edição de campo acontece em dezenas de métodos, e um log que depende de cada um
+    lembrar de chamá-lo tem buracos que ninguém vê. O insert vai num callback de antes do commit
+    (o mecanismo do Envers): transação revertida não deixa log, confirmada não fica sem. Por
+    JDBC, sem entidade JPA, para o listener não se ver a si mesmo
+  - Fica de fora: carimbos `criado_em`/`atualizado_em`, update em massa por JPQL/SQL (não usado
+    para dado de negócio) e mudança só em coleção (`Usuario.papeis`, que já vai para o
+    `historico_status` pelo `UsuarioAlteradoEvent`). **O hash da senha nunca entra**: vira o
+    campo `senha` com "redefinida"
+  - Autor vem do JWT da requisição. Sem token — jobs do Nectar/Gmail, bootstrap — fica nulo e a
+    tela mostra "Sistema". Os listeners `AFTER_COMMIT` rodam na mesma thread, então o projeto
+    que nasce da pendência resolvida é atribuído a quem resolveu
+  - Sem FK em `usuario_id` nem `entidade_id`: excluir usuário não pode falhar por causa do log
+    (daí o nome copiado), e a linha de `EXCLUSAO` aponta por definição para um id que sumiu
+  - ⚠️ Em teste, todo `repository.deleteAll()` do `@AfterEach` gera linhas de `EXCLUSAO`. Não
+    atrapalha (sem FK), mas teste que conta linhas do log precisa limpar a tabela antes — o
+    `LogAtividadeHttpTest` faz `DELETE FROM log_atividade` no `@BeforeEach`
+  - O `@RepositoryTest` não carrega o listener (não é `@Configuration`), então slice de
+    persistência não grava log — só `@SpringBootTest`
 
 **Integração entre abas/etapas** (requisito do usuário): a mudança de status de uma entidade
 deve disparar o avanço automático para a próxima. Ex.: `Pendencia.status = RESOLVIDA` cria/ativa
@@ -348,6 +386,7 @@ Duas decisões de negócio confirmadas com o usuário e refletidas abaixo:
 | Unificacao | todos os papéis | ANALISTA, GESTOR, ADMIN | ADMIN |
 | `historico_status` | todos os papéis (histórico de um registro e consulta agregada) | **ninguém via API** — escrito exclusivamente pelo listener de domínio | ninguém |
 | `email_coelba` (seção 9) | ninguém via API — não tem tela, a consulta é no banco | **ninguém via API** — escrito exclusivamente pelo job do Gmail | ninguém |
+| `log_atividade` (seção 3) | GESTOR, ADMIN (`GET /api/logs`) — mostra o que cada pessoa fez, inclusive senha redefinida, então segue o recorte da gestão de usuários | **ninguém via API** — escrito exclusivamente pelo listener do Hibernate | ninguém |
 | Dashboard (seção 5) | todos os papéis | — | — |
 | Usuário / papéis | GESTOR, ADMIN | GESTOR, ADMIN | ADMIN |
 
@@ -562,6 +601,7 @@ Cada item abaixo quebrou o build ou a aplicação neste projeto — não confie 
   │   ├── login     (login por senha + renovação + AutenticacaoController)
   │   └── dto
   ├── historico (auditoria de status)
+  ├── auditoria (log de atividades: listener do Hibernate + GET /api/logs)
   ├── dashboard          (agregações em SQL nativo sobre historico_status)
   ├── common/referencia  (listas fechadas do cadastro; ver abaixo)
   ├── integracao         (entrada e saída automáticas; ver seção 9)

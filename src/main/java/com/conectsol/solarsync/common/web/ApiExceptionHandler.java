@@ -26,6 +26,7 @@ import com.conectsol.solarsync.common.exception.ClienteSomentePendenciaException
 import com.conectsol.solarsync.common.exception.CredenciaisInvalidasException;
 import com.conectsol.solarsync.common.exception.DebitoNaoConsultadoException;
 import com.conectsol.solarsync.common.exception.LimiteDeTentativasException;
+import com.conectsol.solarsync.common.exception.NumeroSolicitacaoDuplicadoException;
 import com.conectsol.solarsync.common.exception.NumeroSolicitacaoObrigatorioException;
 import com.conectsol.solarsync.common.exception.PrioridadeSemInstalacaoException;
 import com.conectsol.solarsync.common.exception.ProjetoSemInstalacaoException;
@@ -115,6 +116,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(NumeroSolicitacaoObrigatorioException.class)
     ProblemDetail numeroSolicitacaoObrigatorio(NumeroSolicitacaoObrigatorioException excecao) {
         return problema(HttpStatus.CONFLICT, "NUMERO_SOLICITACAO_OBRIGATORIO",
+                excecao.getMessage());
+    }
+
+    @ExceptionHandler(NumeroSolicitacaoDuplicadoException.class)
+    ProblemDetail numeroSolicitacaoDuplicado(NumeroSolicitacaoDuplicadoException excecao) {
+        return problema(HttpStatus.CONFLICT, "NUMERO_SOLICITACAO_DUPLICADO",
                 excecao.getMessage());
     }
 
