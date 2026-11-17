@@ -49,4 +49,15 @@ class OpenApiContratoTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.paths['/api/projetos/{id}/historico'].post")
                         .doesNotExist());
     }
+
+    /** O log de atividades só se lê: um log que aceita inserção à mão não prova nada. */
+    @Test
+    void logDeAtividadesSoTemLeitura() throws Exception {
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paths['/api/logs'].get").exists())
+                .andExpect(jsonPath("$.paths['/api/logs'].post").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/logs'].put").doesNotExist())
+                .andExpect(jsonPath("$.paths['/api/logs'].delete").doesNotExist());
+    }
 }
